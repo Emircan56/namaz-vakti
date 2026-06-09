@@ -641,11 +641,11 @@ function AlarmSetting({
               });
             }}
           >
-            <SelectTrigger className="h-7 w-[80px] text-xs">
+            <SelectTrigger className="h-7 w-[96px] text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="0">Kapalı</SelectItem>
+              <SelectItem value="0">Yok</SelectItem>
               <SelectItem value="5">5 dk</SelectItem>
               <SelectItem value="10">10 dk</SelectItem>
               <SelectItem value="15">15 dk</SelectItem>
