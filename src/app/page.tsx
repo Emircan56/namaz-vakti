@@ -27,7 +27,6 @@ import {
   Sun,
   Bell,
   BellOff,
-  ChevronRight,
   Info,
   RefreshCw,
 } from 'lucide-react';
@@ -466,7 +465,7 @@ function PrayerTimesList({
                       </Badge>
                     )}
                     {isNext && !isActive && (
-                      <Badge variant="outline" className="border-gold text-gold-foreground text-[9px] px-1 py-0 h-4 ml-1 bg-gold/5">
+                      <Badge variant="outline" className="border-gold text-gold text-[9px] px-1 py-0 h-4 ml-1 bg-gold/10 dark:text-amber-300 dark:border-amber-400/50 dark:bg-amber-400/10">
                         SONRAKİ
                       </Badge>
                     )}
@@ -527,31 +526,10 @@ function SettingsSheet({
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
-          {/* İkindi Hesaplama Yöntemi */}
-          <SettingsSection title="İkindi Hesaplama Yöntemi">
-            <Select
-              value={settings.asrType}
-              onValueChange={(val) => updateSettings({ asrType: val })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="evvel">Asr-ı Evvel (Süleymaniye Vakfı varsayılan)</SelectItem>
-                <SelectItem value="sani">Asr-ı Sânî (Hanefî)</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-              Asr-ı Evvel: Gölge = nesne uzunluğu + anlık gölge &nbsp;|&nbsp; Asr-ı Sânî: Gölge = 2 × nesne uzunluğu + anlık gölge
-            </p>
-          </SettingsSection>
-
-          <Separator />
-
           {/* Hatırlatıcılar */}
           <SettingsSection title="Vakit Hatırlatıcıları">
             <p className="text-xs text-muted-foreground mb-3">
-              Her vakit için bildirim açıp kapatabilirsiniz. Seher ve İmsak için erken uyarı süresi seçebilirsiniz.
+              Her vakit için bildirim açıp kapatabilir, erken uyarı süresi seçebilirsiniz.
             </p>
             <div className="space-y-2">
               {PRAYER_ORDER.map((prayer) => (
@@ -616,32 +594,6 @@ function SettingsSheet({
               )}
             </div>
           </SettingsSection>
-
-          <Separator />
-
-          {/* Hesaplama Metodolojisi */}
-          <SettingsSection title="Hesaplama Metodolojisi">
-            <div className="text-xs text-muted-foreground space-y-1 bg-muted/50 p-3 rounded-lg leading-relaxed">
-              <p className="font-semibold text-foreground text-sm mb-2">Süleymaniye Vakfı — Mîzan Sistemi</p>
-              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                <span className="text-foreground/70 font-medium">Seher</span>
-                <span>Fecr-i Kâzıb, Güneş yüksekliği -18°</span>
-                <span className="text-foreground/70 font-medium">İmsak</span>
-                <span>Fecr-i Sâdık, Güneş yüksekliği -9°</span>
-                <span className="text-foreground/70 font-medium">Güneş</span>
-                <span>Doğuşu/Batışı, yükseklik -0.833°</span>
-                <span className="text-foreground/70 font-medium">İkindi</span>
-                <span>Asr-ı Evvel: arccot(1+tan(z))</span>
-                <span className="text-foreground/70 font-medium">Yatsı</span>
-                <span>Kırmızı şafak kaybı, -9°</span>
-                <span className="text-foreground/70 font-medium">Yatsı Sonu</span>
-                <span>Akşam tarafı -18° (astronomik gece)</span>
-              </div>
-              <Separator className="my-2" />
-              <p className="font-medium text-foreground">Temkin (ihtiyat süresi) uygulanmaz</p>
-              <p>Yüksek enlem: Sadece Mîzan kuralı, suni düzeltme yok</p>
-            </div>
-          </SettingsSection>
         </div>
       </SheetContent>
     </Sheet>
@@ -666,7 +618,7 @@ function AlarmSetting({
   alarm: any;
   onChange: (alarm: any) => void;
 }) {
-  const isPreAlarmAvailable = prayer.key === 'seher' || prayer.key === 'imsak';
+  const isPreAlarmAvailable = true;
 
   return (
     <div className={`flex items-center justify-between py-1.5 px-2 rounded-md ${alarm?.alarm ? 'bg-islamic/3' : ''}`}>
@@ -689,11 +641,13 @@ function AlarmSetting({
               });
             }}
           >
-            <SelectTrigger className="h-7 w-[72px] text-xs">
+            <SelectTrigger className="h-7 w-[80px] text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="0">Kapalı</SelectItem>
+              <SelectItem value="5">5 dk</SelectItem>
+              <SelectItem value="10">10 dk</SelectItem>
               <SelectItem value="15">15 dk</SelectItem>
               <SelectItem value="30">30 dk</SelectItem>
               <SelectItem value="45">45 dk</SelectItem>
@@ -727,7 +681,7 @@ function Footer() {
         <div className="h-px w-8 bg-islamic/20" />
       </div>
       <p className="text-[10px] text-muted-foreground/50">
-        Süleymaniye Vakfı Mîzan Metodolojisi &middot; Astronomik hesaplama &middot; Temkin uygulanmaz
+        Süleymaniye Vakfı &middot; Mîzan Metodolojisi
       </p>
     </footer>
   );
