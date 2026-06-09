@@ -22,7 +22,7 @@ export interface PrayerTimes {
   ikindi: Date;      // Asr (gölge formülü)
   aksam: Date;       // Güneş Batışı (-0.833°)
   yatsi: Date;       // Kırmızı şafak kaybı (-9°)
-  yatsiSonu: Date;   // Uyku/Teheccüd başlangıcı (Mizan kuralı)
+  yatsiSonu: Date;   // Akşam tarafı -18° (astronomik gece başlangıcı)
 }
 
 export interface PrayerTimeResult {
@@ -50,7 +50,7 @@ export interface CalculatorConfig {
 }
 
 export const DEFAULT_CONFIG: CalculatorConfig = {
-  asrType: 'sani',       // Hanefi (Asr-ı Sani) varsayılan
+  asrType: 'evvel',      // Süleymaniye Vakfı Asr-ı Evvel kullanır (t=1)
   seherAngle: -18,
   imsakAngle: -9,
   yatsiAngle: -9,
@@ -459,17 +459,24 @@ export class SuleymaniyePrayerCalculator {
     let aksamHour = fixHour(dhuhr + T_aksam);
     let yatsiHour = fixHour(dhuhr + T_yatsi);
 
-    // ── Yatsı Sonu (Mizan Kuralı) ──
+    // ── Yatsı Sonu ──
+    // Süleymaniye Vakfı: Yatsı Sonu = akşam tarafında Güneş -18° altına inerken
+    // Bu, Seher vaktinin (Fecr-i Kâzıb) akşam tarafındaki karşılığıdır
+    // (Astronomik gece başlangıcı = tam karanlık)
+    //
+    // Yatsı Sonu = Dhuhr + T(-18°) → T(-18) akşam saat açısı
+    const T_yatsiSonu = hourAngle(this.config.seherAngle, phi, delta);
+
     let yatsiSonuHour: number;
     let isHighLatitude = false;
     let mizanApplied = false;
 
-    // Yüksek enlem kontrolü: -9°'ye inememe durumu
+    // Yüksek enlem kontrolü: -9° veya -18°'ye inememe durumu
     if (isNaN(T_imsak) || isNaN(T_yatsi) || isNaN(T_seher)) {
       isHighLatitude = true;
       mizanApplied = true;
 
-      // Sadece Mizan kuralını uygula
+      // Beyaz geceler: Sadece Mizan kuralını uygula
       const mizan = applyMizanRule(aksamHour, gunesHour, imsakHour, yatsiHour);
       
       yatsiHour = mizan.yatsiHour;
@@ -484,9 +491,10 @@ export class SuleymaniyePrayerCalculator {
       if (isNaN(T_seher)) {
         seherHour = fixHour(imsakHour - 1);
       }
-    } else {
-      // Normal enlemler: Yatsı Sonu = Mizan kuralıyla hesapla
-      // Gece süresi
+    } else if (isNaN(T_yatsiSonu)) {
+      // -18° akşam tarafında hesaplanamıyor ama -9° hesaplanabiliyor
+      // (Yüksek enlem ama çok aşırı değil)
+      // Gece süresi ile oransal hesaplama yap
       let nightDuration: number;
       if (gunesHour < aksamHour) {
         nightDuration = (24 - aksamHour) + gunesHour;
@@ -494,10 +502,17 @@ export class SuleymaniyePrayerCalculator {
         nightDuration = gunesHour - aksamHour;
       }
 
-      // P1 (Akşam→YatsıSonu) = gece/4
-      // P2 (YatsıSonu→İmsak) = gece/2  (uyku/teheccüd, en uzun)
-      // P3 (İmsak→Güneş) = gece/4
-      yatsiSonuHour = fixHour(aksamHour + nightDuration / 4);
+      // Akşam→Yatsı süresi ile Akşam→YatsıSonu süresi arasındaki oranı kullan
+      // Yatsı = -9°, Yatsı Sonu = -18°, seher ile imsak arasını oranla
+      const aksamToYatsi = yatsiHour - aksamHour;
+      const imsakToSeher = imsakHour - seherHour; // İmsak→Seher (sabah tarafı)
+      
+      // Akşam tarafı da benzer oranda uzamalı
+      yatsiSonuHour = fixHour(aksamHour + aksamToYatsi + imsakToSeher * 0.7);
+    } else {
+      // Normal enlemler: Yatsı Sonu = Dhuhr + T(-18°) akşam tarafı
+      // Seher = Dhuhr - T(-18°) sabah tarafı → simetrik
+      yatsiSonuHour = fixHour(dhuhr + T_yatsiSonu);
     }
 
     // ── Date Nesnelerine Dönüştür ──

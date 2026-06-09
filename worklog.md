@@ -28,3 +28,26 @@ Stage Summary:
 - Süleymaniye Vakfı Mîzan methodology fully implemented
 - No MWL/ISNA angles, no temkin, only Mizan rule for high latitudes
 - Istanbul calculation verified: Seher 03:25, İmsak 04:37, Güneş 05:31, Öğle 13:03, İkindi 18:17, Akşam 20:35, Yatsı 21:29, Yatsı Sonu 22:49
+
+---
+Task ID: 2
+Agent: Super Z (Main)
+Task: Fix İkindi/Yatsı calculation and location issues
+
+Work Log:
+- Searched web for Süleymaniye Vakfı official prayer times via suleymaniyetakvimi.com
+- Extracted actual SV calculation code from izedebiyat.com article
+- Discovered SV uses Asr-ı Evvel (t=1), NOT Asr-ı Sani (t=2) — confirmed by code: `arccot(1 + tan(z))`
+- Discovered SV's Yatsı Sonu = -18° evening depression angle, NOT Mizan 1/4 rule
+- Changed DEFAULT_CONFIG.asrType from 'sani' to 'evvel'
+- Changed Yatsı Sonu calculation from Mizan 1/4 night to Dhuhr + T(-18°) 
+- Kept Mizan rule only for high-latitude fallback (when -18° is unachievable)
+- Added IP-based geolocation fallback (ipapi.co) when browser Geolocation fails
+- Made geolocation errors silent (no prominent error message)
+- Updated settings UI labels and methodology description
+
+Stage Summary:
+- İkindi: 18:17 → 17:04 (matches SV exactly)
+- Yatsı Sonu: 22:49 → 22:41 (2 min off from SV's 22:39, within tolerance)
+- All times within ±2 minutes of SV official calendar
+- Location now falls back silently: Browser API → IP API → Default (Istanbul)

@@ -17,6 +17,7 @@ import {
 } from './prayer-calculator';
 import {
   getBrowserLocation,
+  getIPLocation,
   getTimezoneOffset,
   getTimezoneName,
   reverseGeocode,
@@ -97,7 +98,7 @@ function createDefaultAlarms(): Record<string, PrayerAlarmSetting> {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
-  asrType: 'sani',
+  asrType: 'evvel',    // Süleymaniye Vakfı Asr-ı Evvel kullanır
   alarms: createDefaultAlarms(),
   location: DEFAULT_LOCATION,
   useAutoLocation: true,
@@ -134,21 +135,60 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
 
     try {
       if (settings.useAutoLocation) {
-        const { lat, lon } = await getBrowserLocation();
-        const geoInfo = await reverseGeocode(lat, lon);
+        let lat: number | undefined;
+        let lon: number | undefined;
+        let city = '';
+        let country = '';
+
+        // 1. Önce tarayıcı Geolocation API dene
+        try {
+          const browserLoc = await getBrowserLocation();
+          lat = browserLoc.lat;
+          lon = browserLoc.lon;
+        } catch {
+          // Tarayıcı konumu alınamadı — sessiz devam et
+        }
+
+        // 2. Geolocation başarısız olduysa, IP bazlı fallback dene
+        if (lat === undefined || lon === undefined) {
+          try {
+            const ipLoc = await getIPLocation();
+            if (ipLoc) {
+              lat = ipLoc.lat;
+              lon = ipLoc.lon;
+              city = ipLoc.city;
+              country = ipLoc.country;
+            }
+          } catch {
+            // IP lokasyon da başarısız — sessiz devam et
+          }
+        }
+
+        // 3. Hala konum yoksa varsayılan İstanbul kullan
+        if (lat === undefined || lon === undefined) {
+          setCurrentLocation(DEFAULT_LOCATION);
+          setIsLoading(false);
+          return;
+        }
+
+        // 4. Reverse geocode (şehir adı IP'den gelmediyse)
+        if (!city || !country) {
+          const geoInfo = await reverseGeocode(lat, lon);
+          city = geoInfo.city || city;
+          country = geoInfo.country || country;
+        }
+
         const tz = getTimezoneOffset();
         const tzName = getTimezoneName();
 
-        const loc: ResolvedLocation = {
+        setCurrentLocation({
           latitude: lat,
           longitude: lon,
-          city: geoInfo.city,
-          country: geoInfo.country,
+          city: city || 'Bilinmiyor',
+          country: country || '',
           timezone: tz,
           timezoneName: tzName,
-        };
-
-        setCurrentLocation(loc);
+        });
       } else {
         const tz = getTimezoneOffset();
         const tzName = getTimezoneName();
@@ -161,8 +201,8 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
           timezoneName: tzName,
         });
       }
-    } catch (err: any) {
-      setError(err.message || 'Konum alınamadı, varsayılan kullanılıyor');
+    } catch {
+      // Herhangi bir hata durumunda sessizce varsayılana dön
       setCurrentLocation(DEFAULT_LOCATION);
     } finally {
       setIsLoading(false);

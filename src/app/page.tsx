@@ -249,11 +249,7 @@ function Header({
           </span>
         </div>
 
-        {error && (
-          <div className="text-xs mt-1.5 opacity-60 text-center bg-islamic-light/10 rounded px-2 py-0.5">
-            {error}
-          </div>
-        )}
+        {/* Hata mesajı kaldırıldı — sessiz fallback */}
       </div>
     </header>
   );
@@ -541,7 +537,7 @@ function SettingsSheet({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="evvel">Asr-ı Evvel (Şâfiî/Mâlikî)</SelectItem>
+                <SelectItem value="evvel">Asr-ı Evvel (Süleymaniye Vakfı varsayılan)</SelectItem>
                 <SelectItem value="sani">Asr-ı Sânî (Hanefî)</SelectItem>
               </SelectContent>
             </Select>
@@ -635,11 +631,11 @@ function SettingsSheet({
                 <span className="text-foreground/70 font-medium">Güneş</span>
                 <span>Doğuşu/Batışı, yükseklik -0.833°</span>
                 <span className="text-foreground/70 font-medium">İkindi</span>
-                <span>Cotangent gölge formülü (A(t))</span>
+                <span>Asr-ı Evvel: arccot(1+tan(z))</span>
                 <span className="text-foreground/70 font-medium">Yatsı</span>
                 <span>Kırmızı şafak kaybı, -9°</span>
                 <span className="text-foreground/70 font-medium">Yatsı Sonu</span>
-                <span>Mîzan kuralı: Gece 1/4 + 1/2 + 1/4</span>
+                <span>Akşam tarafı -18° (astronomik gece)</span>
               </div>
               <Separator className="my-2" />
               <p className="font-medium text-foreground">Temkin (ihtiyat süresi) uygulanmaz</p>

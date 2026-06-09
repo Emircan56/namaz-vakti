@@ -29,15 +29,39 @@ export function getBrowserLocation(): Promise<{ lat: number; lon: number }> {
         });
       },
       (err) => {
-        reject(new Error(`Konum alınamadı: ${err.message}`));
+        reject(err);
       },
       {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 300000, // 5 dakika cache
+        enableHighAccuracy: false,   // Hızlı sonuç için high accuracy kapat
+        timeout: 5000,               // 5 saniye zaman aşımı
+        maximumAge: 600000,          // 10 dakika cache
       }
     );
   });
+}
+
+/**
+ * IP bazlı konum tespiti (fallback)
+ */
+export async function getIPLocation(): Promise<{ lat: number; lon: number; city: string; country: string } | null> {
+  try {
+    const res = await fetch('https://ipapi.co/json/', {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.latitude && data.longitude) {
+      return {
+        lat: data.latitude,
+        lon: data.longitude,
+        city: data.city || '',
+        country: data.country_name || '',
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -67,15 +91,16 @@ export async function reverseGeocode(lat: number, lon: number): Promise<{ city: 
         headers: {
           'User-Agent': 'SuleymaniyePrayerApp/1.0',
         },
+        signal: AbortSignal.timeout(5000),
       }
     );
     const data = await res.json();
     const addr = data.address || {};
-    const city = addr.city || addr.town || addr.village || addr.county || addr.state || 'Bilinmiyor';
-    const country = addr.country || 'Bilinmiyor';
+    const city = addr.city || addr.town || addr.village || addr.county || addr.state || '';
+    const country = addr.country || '';
     return { city, country };
   } catch {
-    return { city: 'Bilinmiyor', country: 'Bilinmiyor' };
+    return { city: '', country: '' };
   }
 }
 
