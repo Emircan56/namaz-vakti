@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://praytimes.org/docs/calculation",
+    "name": "Prayer Times Calculation - PrayTimes.org",
+    "snippet": "Let α be the twilight angle for Isha, and let t = α/60. The period between sunset and sunrise is divided into t parts. Isha begins after the first part. For ...",
+    "host_name": "praytimes.org",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://astronomycenter.net/pdf/mohamoud_2017.pdf",
+    "name": "[PDF] Tracing the Shadow: Mathematical Calculation of Prayer Times",
+    "snippet": "For the determination of the start of Isha'a and Fajr prayer times, we adopted angle 18° for its wide acceptance in the region. All the cities chosen fall in ...",
+    "host_name": "astronomycenter.net",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/osyounis/islamic_prayer_time_app/blob/main/docs/calculation_methodology.md",
+    "name": "islamic_prayer_time_app/docs/calculation_methodology.md at main",
+    "snippet": "A Python library for calculating Muslim prayer times and Qibla direction using astronomical algorithms. Supports multiple calculation methods, DST handling, ...",
+    "host_name": "github.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.bibalex.org/SCIplanet/en/Article/Details.aspx?id=13709",
+    "name": "SCIplanet - Prayer Time Calculation Method",
+    "snippet": "The calculations of the Dhuhr, Asr, and Maghrib prayer times depend on the position of the Sun, which can be easily estimated scientifically.",
+    "host_name": "www.bibalex.org",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.academia.edu/35801795/Prayer_Time_Algorithm_for_Software_Development",
+    "name": "Prayer Time Algorithm for Software Development - Academia.edu",
+    "snippet": "To calculate the prayer times for a certain place we need to know the latitude (B) and longitude (L) of the location and its reference longitude (R).",
+    "host_name": "www.academia.edu",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://fiqhcouncil.org/the-suggested-calculation-method-for-fajr-and-isha",
+    "name": "How should the times of Fajr and Isha be calculated?",
+    "snippet": "The Fiqh Council of North America suggests using 15° for both Fajr and Isha in the USA and using 13° for both Fajr and Isha in Canada, throughout the year.",
+    "host_name": "fiqhcouncil.org",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://medium.com/@rizkirakasiwi09/understanding-islamic-prayer-time-calculations-the-mathematics-behind-libmuslim-library-ee169e3e97c3",
+    "name": "Understanding Islamic Prayer Time Calculations: The Mathematics",
+    "snippet": "Once we have the sun's position, we can calculate the prayer times. All prayer times (except Dhuhr and Asr) are defined by the angle of the sun ...",
+    "host_name": "medium.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.jstor.org/stable/41492186",
+    "name": "ASTRONOMICAL DETERMINATION OF ISLAMIC TIMES - jstor",
+    "snippet": "that the Solar zenith angle (Z) is 90° and increasing. Time for Fajr prayers comes to an end when Z is 90° and decreasing. The time ...",
+    "host_name": "www.jstor.org",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.moonsighting.com/how-we.html",
+    "name": "How We Calculate Muslim Prayer Times - Moonsighting.com",
+    "snippet": "Fajr & Isha are calculated by others using different criteria, all over the world. Some use 15degrees, 18degrees, or even 20degrees. Others use 75 minutes or ...",
+    "host_name": "www.moonsighting.com",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://prayware.infinityfreeapp.com/alperen/makale/index.htm",
+    "name": "Definition & Calculation of Prayer Timings",
+    "snippet": "Hence the Sun Elevation Angle at zenith time is the highest vertical angle for that day. ... elevation angle for the calculation of Fajr and Isha timings. The ...",
+    "host_name": "prayware.infinityfreeapp.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]

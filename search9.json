@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://www.reddit.com/r/Python/comments/kkc86f/i_made_prayer_time_calculator_positive_criticism/?tl=tr",
+    "name": "Namaz vakti hesaplayıcısı yaptım, olumlu eleştirilere açığım : r/Python",
+    "snippet": "Bu gerçekten harika! Tek eleştirim, yeterince fonksiyon kullanmaman. Fonksiyonlara bayılırım. Örneğin, şu kod: ###================ ...\nFarklı yerler, enlemlerine göre farklı hesaplamalar yapacaktır. Tropikal bölgelerde namaz vakitleri çoğunlukla sabittir ve farklılıklar ılıman ...",
+    "host_name": "www.reddit.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/erdemarslan/namazvakti-Python",
+    "name": "erdemarslan/namazvakti-Python - GitHub",
+    "snippet": "Bu Python Sınıfı Diyanet İşleri Başkanlığından Namaz / ezan vakitlerini çeker. Kullanımı. Öncelikle aşağıdaki kütüphaneleri kurunuz.,.",
+    "host_name": "github.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://pvlib-python.readthedocs.io/en/stable/reference/solarposition.html",
+    "name": "Solar Position — pvlib python 0.15.1 documentation",
+    "snippet": "Uses the pvlib.solarposition.get_solarposition() function to calculate the solar zenith, azimuth, etc. solarposition.get_solarposition (time ...",
+    "host_name": "pvlib-python.readthedocs.io",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.izedebiyat.com/yapit/namaz-vakitlerinin-belirlenmesi-kurana-ve-astronomik-hesaplamalara-dayali-bir-yaklasim",
+    "name": "Namaz Vakitlerinin Belirlenmesi: Kur'an'a ve Astronomik  - İzEdebiyat",
+    "snippet": "Ufuk düzlemi ile ilgili sorularda, gündüz süresi ve Güneş'in ufuk düzlemindeki açıları biliniyorsa, yerel saat hesaplamak mümkündür. Dünyada ...",
+    "host_name": "www.izedebiyat.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://avys.omu.edu.tr/storage/app/public/muhammet.ozdogan/71124/3.%20Hafta.pdf",
+    "name": "[PDF] MAK452 Güneş Enerjisi",
+    "snippet": "GB = Cos-1 [-tan(δ) tan(φ)]. GB = Cos-1 [-tan(-11.5) tan(37)] GB = 81.2°. Bu açının 15‟e bölümünden güneĢin batıĢ saati bulunur. Güneş batış ...",
+    "host_name": "avys.omu.edu.tr",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://assessingsolar.org/notebooks/solar_position.html",
+    "name": "Solar Position - Solar Resource Assessment in Python",
+    "snippet": "In Python, the solar position angles can be easily calculated at any site using the solar position algorithm (SPA) of pvlib.",
+    "host_name": "assessingsolar.org",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.ecmwf.int/sites/default/files/elibrary/2022/20336-calculating-cosine-solar-zenith-angle-thermal-comfort-indices.pdf",
+    "name": "[PDF] Calculating the Cosine of the Solar Zenith Angle for Thermal",
+    "snippet": "The cosine of the solar zenith angle (cossza) is a key component in Mean Radiant Temperature. (MRT). Mean Radiant Temperature is used in the calculation of the ...",
+    "host_name": "www.ecmwf.int",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://tr.linkedin.com/posts/ilhan-goktas-96469a118_github-zencefilefendidiyanet-offline-namaz-vakitleri-hesaplama-activity-7441242176702914561-TmkK",
+    "name": "GitHub | Ilhan Goktas | 48 yorum - LinkedIn",
+    "snippet": "İmsak, gün doğumu, akşam ve yatsı vakitleri için hangi açıları kullandınız. Diyanet ile uyumlu dediğinize göre imsak için -18 aldığınızı ...",
+    "host_name": "tr.linkedin.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://iqibla.com/tr/blogs/blog/prayer-times-calculation-methods?srsltid=AfmBOor82UFwUi4q4TI9Qo6KFW3t5wpMJXyqa7qKejBwayxPpXOl45hc",
+    "name": "Namaz vakitleri hesaplama yöntemleri - iQIBLA",
+    "snippet": "Namaz vakitlerinin hesaplanmasında çeşitli yöntemler vardır ve bunlar arasındaki en önemli fark sabah, yatsı ve ikindi namazlarında görülür.",
+    "host_name": "iqibla.com",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=xlqj4n0YiI4",
+    "name": "C# Namaz Vakitleri - Ezan Vakitleri Program Kodları | #csharp",
+    "snippet": "C# diliyle yazılmış Ezan vakitleri program kodları... #trcoderooter #csharp #namazvakti #ezanvakti #prayer #kodlar #program #nasılyapılır ...",
+    "host_name": "www.youtube.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]
