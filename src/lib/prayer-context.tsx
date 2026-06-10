@@ -54,6 +54,8 @@ export interface AppSettings {
 // Context Tipleri
 // ────────────────────────────────────────────────────────────
 
+export type LocationSource = 'browser' | 'ip' | 'default' | 'manual';
+
 interface PrayerContextType {
   prayerTimes: PrayerTimes | null;
   settings: AppSettings;
@@ -66,6 +68,7 @@ interface PrayerContextType {
   error: string | null;
   isHighLatitude: boolean;
   mizanApplied: boolean;
+  locationSource: LocationSource;
   updateSettings: (partial: Partial<AppSettings>) => void;
   refreshLocation: () => Promise<void>;
 }
@@ -123,6 +126,7 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [isHighLatitude, setIsHighLatitude] = useState(false);
   const [mizanApplied, setMizanApplied] = useState(false);
+  const [locationSource, setLocationSource] = useState<LocationSource>('default');
 
   const calculatorRef = useRef<SuleymaniyePrayerCalculator>(
     new SuleymaniyePrayerCalculator({ asrType: DEFAULT_SETTINGS.asrType })
@@ -141,10 +145,12 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
         let country = '';
 
         // 1. Önce tarayıcı Geolocation API dene
+        let source: LocationSource = 'default';
         try {
           const browserLoc = await getBrowserLocation();
           lat = browserLoc.lat;
           lon = browserLoc.lon;
+          source = 'browser';
         } catch {
           // Tarayıcı konumu alınamadı — sessiz devam et
         }
@@ -158,6 +164,7 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
               lon = ipLoc.lon;
               city = ipLoc.city;
               country = ipLoc.country;
+              source = 'ip';
             }
           } catch {
             // IP lokasyon da başarısız — sessiz devam et
@@ -167,9 +174,12 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
         // 3. Hala konum yoksa varsayılan İstanbul kullan
         if (lat === undefined || lon === undefined) {
           setCurrentLocation(DEFAULT_LOCATION);
+          setLocationSource('default');
           setIsLoading(false);
           return;
         }
+
+        setLocationSource(source);
 
         // 4. Reverse geocode (şehir adı IP'den gelmediyse)
         if (!city || !country) {
@@ -200,6 +210,7 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
           timezone: tz,
           timezoneName: tzName,
         });
+        setLocationSource('manual');
       }
     } catch {
       // Herhangi bir hata durumunda sessizce varsayılana dön
@@ -335,6 +346,7 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
     error,
     isHighLatitude,
     mizanApplied,
+    locationSource,
     updateSettings,
     refreshLocation,
   };

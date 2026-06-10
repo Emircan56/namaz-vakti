@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   PrayerAppProvider,
   usePrayerApp,
+  type LocationSource,
 } from '@/lib/prayer-context';
 import {
   PRAYER_ORDER,
@@ -29,6 +30,10 @@ import {
   BellOff,
   Info,
   RefreshCw,
+  AlertTriangle,
+  X,
+  Navigation,
+  Wifi,
 } from 'lucide-react';
 
 // ────────────────────────────────────────────────────────────
@@ -56,6 +61,7 @@ function PrayerApp() {
     error,
     isHighLatitude,
     mizanApplied,
+    locationSource,
     updateSettings,
     refreshLocation,
   } = usePrayerApp();
@@ -67,6 +73,7 @@ function PrayerApp() {
     return saved === 'dark' || (!saved && prefersDark);
   });
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [locationBannerDismissed, setLocationBannerDismissed] = useState(false);
 
   // Dark mode sync with DOM
   useEffect(() => {
@@ -114,6 +121,11 @@ function PrayerApp() {
         onRefresh={refreshLocation}
         error={error}
       />
+
+      {/* Konum Bildirimi */}
+      {locationSource !== 'browser' && locationSource !== 'manual' && !locationBannerDismissed && (
+        <LocationBanner source={locationSource} onDismiss={() => setLocationBannerDismissed(true)} onRetry={refreshLocation} />
+      )}
 
       {/* Ana İçerik */}
       <main className="flex-1 flex flex-col items-center px-4 py-4 gap-4 max-w-lg mx-auto w-full">
@@ -663,6 +675,89 @@ function AlarmSetting({
             });
           }}
         />
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// Konum Bildirim Banner'ı
+// ────────────────────────────────────────────────────────────
+
+function LocationBanner({
+  source,
+  onDismiss,
+  onRetry,
+}: {
+  source: LocationSource;
+  onDismiss: () => void;
+  onRetry: () => Promise<void>;
+}) {
+  const isIP = source === 'ip';
+  const isDefault = source === 'default';
+
+  return (
+    <div className="w-full max-w-lg mx-auto px-4">
+      <div className={`
+        relative rounded-lg border p-3 text-sm
+        ${isIP
+          ? 'border-amber-500/40 bg-amber-50 dark:bg-amber-950/30'
+          : 'border-red-500/40 bg-red-50 dark:bg-red-950/30'
+        }
+      `}>
+        {/* Kapat butonu */}
+        <button
+          onClick={onDismiss}
+          className="absolute top-2 right-2 p-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+          aria-label="Kapat"
+        >
+          <X className="w-3.5 h-3.5 text-muted-foreground" />
+        </button>
+
+        <div className="flex gap-3 pr-6">
+          {/* İkon */}
+          <div className={`
+            shrink-0 w-8 h-8 rounded-full flex items-center justify-center
+            ${isIP
+              ? 'bg-amber-100 dark:bg-amber-900/50'
+              : 'bg-red-100 dark:bg-red-900/50'
+            }
+          `}>
+            {isIP
+              ? <Wifi className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              : <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400" />
+            }
+          </div>
+
+          {/* Metin */}
+          <div className="flex-1 min-w-0">
+            <p className={`font-semibold text-xs ${isIP ? 'text-amber-800 dark:text-amber-300' : 'text-red-800 dark:text-red-300'}`}>
+              {isIP ? 'IP Tabanlı Konum Tespit Edildi' : 'Tam Konum Alınamadı'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+              {isIP
+                ? 'Cihazınızın konum izni verilmediği için IP adresine göre yaklaşık konum kullanılıyor. Vakit hesaplamalarında sapma olabilir.'
+                : 'Cihaz konumu ve IP tabanlı konum alınamadı. Varsayılan İstanbul konumu kullanılıyor.'
+              }
+            </p>
+            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+              <span className="font-medium text-foreground">Tam konum için:</span> Tarayıcı ayarlarından konum iznini açın, sayfayı yenileyin veya ayarlardan konumu manuel girin.
+            </p>
+
+            {/* Aksiyonlar */}
+            <div className="flex gap-2 mt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1.5"
+                onClick={onRetry}
+              >
+                <Navigation className="w-3 h-3" />
+                Tekrar Dene
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
