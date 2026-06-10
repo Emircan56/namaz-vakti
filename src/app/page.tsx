@@ -704,7 +704,7 @@ function LocationBanner({
     // 8 saniye sonra otomatik kapan
     const timer = setTimeout(() => {
       setVisible(false);
-      setTimeout(onDismiss, 400); // Çıkış animasyonu bitince kaldır
+      setTimeout(onDismiss, 500); // Çıkış animasyonu bitince kaldır
     }, 8000);
 
     return () => clearTimeout(timer);
@@ -712,13 +712,13 @@ function LocationBanner({
 
   const handleDismiss = useCallback(() => {
     setVisible(false);
-    setTimeout(onDismiss, 400);
+    setTimeout(onDismiss, 500);
   }, [onDismiss]);
 
   return (
     <div className={`
       fixed bottom-4 left-4 right-4 z-50 flex justify-center
-      transition-all duration-400 ease-out
+      transition-all duration-[400ms] ease-out
       ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}
     `}>
       <div className={`
