@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   PrayerAppProvider,
   usePrayerApp,
@@ -695,25 +695,27 @@ function LocationBanner({
 }) {
   const [visible, setVisible] = useState(false);
   const isIP = source === 'ip';
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
 
   // Görünürlük animasyonu + otomatik kapanma
   useEffect(() => {
-    // Girş animasyonu
+    // Giriş animasyonu
     requestAnimationFrame(() => setVisible(true));
 
     // 8 saniye sonra otomatik kapan
     const timer = setTimeout(() => {
       setVisible(false);
-      setTimeout(onDismiss, 500); // Çıkış animasyonu bitince kaldır
+      setTimeout(() => onDismissRef.current(), 500); // Çıkış animasyonu bitince kaldır
     }, 8000);
 
     return () => clearTimeout(timer);
-  }, [onDismiss]);
+  }, []);
 
   const handleDismiss = useCallback(() => {
     setVisible(false);
-    setTimeout(onDismiss, 500);
-  }, [onDismiss]);
+    setTimeout(() => onDismissRef.current(), 500);
+  }, []);
 
   return (
     <div className={`
