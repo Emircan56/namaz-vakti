@@ -36,6 +36,8 @@ import {
   X,
   Navigation,
   Wifi,
+  BellRing,
+  BellDot,
 } from 'lucide-react';
 
 // ────────────────────────────────────────────────────────────
@@ -67,6 +69,10 @@ function PrayerApp() {
     prayerOrder,
     updateSettings,
     refreshLocation,
+    pushSupported,
+    pushPermission,
+    enablePushNotifications,
+    disablePushNotifications,
   } = usePrayerApp();
 
   const [isDark, setIsDark] = useState(() => {
@@ -150,6 +156,10 @@ function PrayerApp() {
           settings={settings}
           updateSettings={updateSettings}
           prayerOrder={prayerOrder}
+          pushSupported={pushSupported}
+          pushPermission={pushPermission}
+          enablePushNotifications={enablePushNotifications}
+          disablePushNotifications={disablePushNotifications}
         />
       </main>
 
@@ -424,6 +434,10 @@ function PrayerTimesList({
   settings,
   updateSettings,
   prayerOrder,
+  pushSupported,
+  pushPermission,
+  enablePushNotifications,
+  disablePushNotifications,
 }: {
   prayerTimes: PrayerTimes | null;
   activePrayer: PrayerInfo | null;
@@ -431,6 +445,10 @@ function PrayerTimesList({
   settings: any;
   updateSettings: (partial: any) => void;
   prayerOrder: PrayerInfo[];
+  pushSupported: boolean;
+  pushPermission: NotificationPermission | 'default';
+  enablePushNotifications: () => Promise<boolean>;
+  disablePushNotifications: () => Promise<void>;
 }) {
   if (!prayerTimes) return null;
 
@@ -509,7 +527,15 @@ function PrayerTimesList({
 
       {/* Ayarlar Butonu */}
       <div className="px-4 py-3 border-t border-border/30 bg-muted/20">
-        <SettingsSheet settings={settings} updateSettings={updateSettings} prayerOrder={prayerOrder} />
+        <SettingsSheet
+          settings={settings}
+          updateSettings={updateSettings}
+          prayerOrder={prayerOrder}
+          pushSupported={pushSupported}
+          pushPermission={pushPermission}
+          enablePushNotifications={enablePushNotifications}
+          disablePushNotifications={disablePushNotifications}
+        />
       </div>
     </Card>
   );
@@ -523,10 +549,18 @@ function SettingsSheet({
   settings,
   updateSettings,
   prayerOrder,
+  pushSupported,
+  pushPermission,
+  enablePushNotifications,
+  disablePushNotifications,
 }: {
   settings: any;
   updateSettings: (partial: any) => void;
   prayerOrder: PrayerInfo[];
+  pushSupported: boolean;
+  pushPermission: NotificationPermission | 'default';
+  enablePushNotifications: () => Promise<boolean>;
+  disablePushNotifications: () => Promise<void>;
 }) {
   return (
     <Sheet>
@@ -581,6 +615,70 @@ function SettingsSheet({
                 <p className="text-[10px] text-muted-foreground leading-relaxed">
                   Hanefî mezhebine göre ikindi vakti, gölgenin eşya uzunluğunun 2 katına ulaşmasıyla başlar. Standart mezheplerde ise 1 katına ulaşmasıyla başlar.
                 </p>
+              </div>
+            )}
+          </SettingsSection>
+
+          <Separator />
+
+          {/* Push Bildirimleri */}
+          <SettingsSection title="Bildirim Sistemi">
+            {pushSupported ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {settings.pushEnabled ? (
+                      <BellRing className="w-4 h-4 text-islamic" />
+                    ) : (
+                      <BellDot className="w-4 h-4 text-muted-foreground" />
+                    )}
+                    <div>
+                      <Label className="text-sm">Push Bildirimleri</Label>
+                      <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+                        {settings.pushEnabled
+                          ? 'Site kapalıyken bile bildirim alınır'
+                          : 'Açınca site kapalıyken de bildirim gelir'}
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={settings.pushEnabled}
+                    onCheckedChange={async (val) => {
+                      if (val) {
+                        const success = await enablePushNotifications();
+                        if (success) {
+                          updateSettings({ pushEnabled: true });
+                        }
+                      } else {
+                        await disablePushNotifications();
+                        updateSettings({ pushEnabled: false });
+                      }
+                    }}
+                  />
+                </div>
+                {settings.pushEnabled && pushPermission === 'granted' && (
+                  <div className="flex items-center gap-2 p-2 rounded-md bg-islamic/5 border border-islamic/10">
+                    <BellRing className="w-3.5 h-3.5 text-islamic shrink-0" />
+                    <span className="text-[10px] text-islamic/70 leading-relaxed">
+                      Push bildirimleri aktif — tarayıcı kapalıyken bile vakti geldiğinde bildirim alacaksınız.
+                    </span>
+                  </div>
+                )}
+                {pushPermission === 'denied' && (
+                  <div className="flex items-center gap-2 p-2 rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/30">
+                    <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    <span className="text-[10px] text-red-600 dark:text-red-400 leading-relaxed">
+                      Bildirim izni reddedildi. Tarayıcı ayarlarından bildirim iznini açmanız gerekiyor.
+                    </span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 p-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/30">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <span className="text-[10px] text-amber-600 dark:text-amber-400 leading-relaxed">
+                  Tarayıcınız push bildirimleri desteklemiyor. Bildirimler sadece site açıkken çalışır.
+                </span>
               </div>
             )}
           </SettingsSection>

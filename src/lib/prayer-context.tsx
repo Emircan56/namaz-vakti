@@ -7,7 +7,6 @@ import {
   METHOD_CONFIGS,
   type PrayerTimes,
   type CalculatorConfig,
-  type AsrType,
   type CalculationMethod,
   gregorianToHijri,
   getActivePrayer,
@@ -18,6 +17,7 @@ import {
   PRAYER_ORDER_STANDARD,
   type PrayerInfo,
   type Location,
+  type PrayerAlarmSetting,
 } from './prayer-calculator';
 import {
   getBrowserLocation,
@@ -35,13 +35,7 @@ import {
 
 export interface PreAlarmSetting {
   enabled: boolean;
-  minutes: number; // 5, 10, 15, 30, veya 45
-}
-
-export interface PrayerAlarmSetting {
-  vakit: string;
-  alarm: boolean;
-  preAlarm: PreAlarmSetting;
+  minutes: number;
 }
 
 export type AsrMadhab = 'standard' | 'hanafi';
@@ -55,6 +49,7 @@ export interface AppSettings {
   manualLatitude: number;
   manualLongitude: number;
   manualCity: string;
+  pushEnabled: boolean;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -77,8 +72,12 @@ interface PrayerContextType {
   mizanApplied: boolean;
   locationSource: LocationSource;
   prayerOrder: PrayerInfo[];
+  pushSupported: boolean;
+  pushPermission: NotificationPermission | 'default';
   updateSettings: (partial: Partial<AppSettings>) => void;
   refreshLocation: (forceRefresh?: boolean) => Promise<void>;
+  enablePushNotifications: () => Promise<boolean>;
+  disablePushNotifications: () => Promise<void>;
 }
 
 const PrayerAppContext = createContext<PrayerContextType | null>(null);
@@ -95,7 +94,6 @@ export function usePrayerApp() {
 
 function createDefaultAlarms(): Record<string, PrayerAlarmSetting> {
   const alarms: Record<string, PrayerAlarmSetting> = {};
-  // SV vakitleri için varsayılan alarm ayarları
   for (const p of PRAYER_ORDER_SV) {
     alarms[p.key] = {
       vakit: p.key,
@@ -106,7 +104,6 @@ function createDefaultAlarms(): Record<string, PrayerAlarmSetting> {
       },
     };
   }
-  // Standart vakitler için de ekle
   for (const p of PRAYER_ORDER_STANDARD) {
     if (!alarms[p.key]) {
       alarms[p.key] = {
@@ -131,6 +128,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   manualLatitude: 41.0166,
   manualLongitude: 28.9667,
   manualCity: 'İstanbul',
+  pushEnabled: false,
 };
 
 // ────────────────────────────────────────────────────────────
@@ -139,10 +137,8 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 const SETTINGS_CACHE_KEY = 'prayer_app_settings';
 
-/** Ayarları localStorage'a kaydet */
 function saveSettingsToCache(settings: AppSettings): void {
   try {
-    // location alanını kaydetme (konum ayrı cache'leniyor)
     const toSave = {
       calculationMethod: settings.calculationMethod,
       asrMadhab: settings.asrMadhab,
@@ -151,42 +147,35 @@ function saveSettingsToCache(settings: AppSettings): void {
       manualLatitude: settings.manualLatitude,
       manualLongitude: settings.manualLongitude,
       manualCity: settings.manualCity,
+      pushEnabled: settings.pushEnabled,
     };
     localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(toSave));
-  } catch {
-    // localStorage erişimi başarısız — sessiz devam et
-  }
+  } catch {}
 }
 
-/** Ayarları localStorage'dan yükle */
 function loadSettingsFromCache(): Partial<AppSettings> | null {
   try {
     const raw = localStorage.getItem(SETTINGS_CACHE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed;
+    return JSON.parse(raw);
   } catch {
     return null;
   }
 }
 
-/** Başlangıç ayarlarını oluştur (cache'den + varsayılan) */
 function getInitialSettings(): AppSettings {
   const cached = loadSettingsFromCache();
   if (!cached) return DEFAULT_SETTINGS;
-
   return {
     calculationMethod: cached.calculationMethod ?? DEFAULT_SETTINGS.calculationMethod,
     asrMadhab: cached.asrMadhab ?? DEFAULT_SETTINGS.asrMadhab,
-    alarms: {
-      ...createDefaultAlarms(), // yeni eklenen vakitler için varsayılan
-      ...(cached.alarms ?? {}), // kaydedilmiş ayarlar öncelikli
-    },
+    alarms: { ...createDefaultAlarms(), ...(cached.alarms ?? {}) },
     location: DEFAULT_SETTINGS.location,
     useAutoLocation: cached.useAutoLocation ?? DEFAULT_SETTINGS.useAutoLocation,
     manualLatitude: cached.manualLatitude ?? DEFAULT_SETTINGS.manualLatitude,
     manualLongitude: cached.manualLongitude ?? DEFAULT_SETTINGS.manualLongitude,
     manualCity: cached.manualCity ?? DEFAULT_SETTINGS.manualCity,
+    pushEnabled: cached.pushEnabled ?? DEFAULT_SETTINGS.pushEnabled,
   };
 }
 
@@ -198,7 +187,7 @@ const LOCATION_CACHE_KEY = 'prayer_app_cached_location';
 const LOCATION_SOURCE_CACHE_KEY = 'prayer_app_cached_location_source';
 
 interface CachedLocation extends ResolvedLocation {
-  _cachedAt: number; // epoch timestamp
+  _cachedAt: number;
 }
 
 function saveLocationToCache(loc: ResolvedLocation, source: LocationSource): void {
@@ -206,9 +195,7 @@ function saveLocationToCache(loc: ResolvedLocation, source: LocationSource): voi
     const cached: CachedLocation = { ...loc, _cachedAt: Date.now() };
     localStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(cached));
     localStorage.setItem(LOCATION_SOURCE_CACHE_KEY, source);
-  } catch {
-    // localStorage erişimi başarısız — sessiz devam et
-  }
+  } catch {}
 }
 
 function loadLocationFromCache(): { location: ResolvedLocation; source: LocationSource } | null {
@@ -217,7 +204,6 @@ function loadLocationFromCache(): { location: ResolvedLocation; source: Location
     const source = localStorage.getItem(LOCATION_SOURCE_CACHE_KEY) as LocationSource | null;
     if (!raw) return null;
     const cached: CachedLocation = JSON.parse(raw);
-    // Cache geçerliliğini kontrol et (7 gün)
     if (cached._cachedAt && Date.now() - cached._cachedAt > 7 * 24 * 60 * 60 * 1000) {
       localStorage.removeItem(LOCATION_CACHE_KEY);
       localStorage.removeItem(LOCATION_SOURCE_CACHE_KEY);
@@ -228,6 +214,23 @@ function loadLocationFromCache(): { location: ResolvedLocation; source: Location
   } catch {
     return null;
   }
+}
+
+// ────────────────────────────────────────────────────────────
+// Push Bildirim Yardımcıları
+// ────────────────────────────────────────────────────────────
+
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '';
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -247,9 +250,10 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
   const [isHighLatitude, setIsHighLatitude] = useState(false);
   const [mizanApplied, setMizanApplied] = useState(false);
   const [locationSource, setLocationSource] = useState<LocationSource>('default');
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
 
-  // Hesaplayıcıyı yönteme göre oluştur (başlangıç ayarlarından)
-  const initialSettings = useRef(getInitialSettings());
+  const initialSettingsRef = useRef(getInitialSettings());
+  const pushSubscriptionRef = useRef<PushSubscription | null>(null);
 
   const getMethodConfig = useCallback((method: CalculationMethod): Partial<CalculatorConfig> => {
     const mc = METHOD_CONFIGS[method];
@@ -264,10 +268,121 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
 
   const calculatorRef = useRef<SuleymaniyePrayerCalculator>(
     new SuleymaniyePrayerCalculator(
-      getMethodConfig(initialSettings.current.calculationMethod),
-      initialSettings.current.asrMadhab
+      getMethodConfig(initialSettingsRef.current.calculationMethod),
+      initialSettingsRef.current.asrMadhab
     )
   );
+
+  // Push desteği kontrolü
+  const pushSupported = typeof window !== 'undefined' &&
+    'serviceWorker' in navigator &&
+    'PushManager' in window &&
+    VAPID_PUBLIC_KEY !== '';
+
+  // ── Service Worker Kaydı ──
+  useEffect(() => {
+    if (!pushSupported) return;
+
+    const registerSW = async () => {
+      try {
+        const registration = await navigator.serviceWorker.register('/sw.js');
+        // Mevcut aboneliği kontrol et
+        const existingSub = await registration.pushManager.getSubscription();
+        if (existingSub) {
+          pushSubscriptionRef.current = existingSub;
+        }
+      } catch (err) {
+        console.error('SW kayıt hatası:', err);
+      }
+    };
+
+    registerSW();
+  }, [pushSupported]);
+
+  // ── Push Aboneliğini Backend'e Gönder ──
+  const syncPushSubscription = useCallback(async (
+    subscription: PushSubscription,
+    loc: ResolvedLocation,
+    sett: AppSettings
+  ) => {
+    try {
+      await fetch('/api/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subscription: subscription.toJSON(),
+          settings: {
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            timezone: loc.timezone,
+            city: loc.city,
+            method: sett.calculationMethod,
+            asrMadhab: sett.asrMadhab,
+            alarms: sett.alarms,
+          },
+        }),
+      });
+    } catch (err) {
+      console.error('Push abonelik senkronizasyon hatası:', err);
+    }
+  }, []);
+
+  // ── Push Bildirimleri Etkinleştir ──
+  const enablePushNotifications = useCallback(async (): Promise<boolean> => {
+    if (!pushSupported) return false;
+
+    try {
+      // Bildirim izni iste
+      const permission = await Notification.requestPermission();
+      setPushPermission(permission);
+      if (permission !== 'granted') return false;
+
+      // Service Worker ready bekle
+      const registration = await navigator.serviceWorker.ready;
+
+      // Push aboneliği oluştur
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+
+      pushSubscriptionRef.current = subscription;
+
+      // Backend'e gönder
+      await syncPushSubscription(subscription, currentLocation, settings);
+
+      return true;
+    } catch (err) {
+      console.error('Push bildirim etkinleştirme hatası:', err);
+      return false;
+    }
+  }, [pushSupported, currentLocation, settings, syncPushSubscription]);
+
+  // ── Push Bildirimleri Devre Dışı Bırak ──
+  const disablePushNotifications = useCallback(async () => {
+    try {
+      if (pushSubscriptionRef.current) {
+        // Backend'den kaldır
+        await fetch('/api/push', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: pushSubscriptionRef.current.endpoint }),
+        });
+
+        // Tarayıcıdan aboneliği kaldır
+        await pushSubscriptionRef.current.unsubscribe();
+        pushSubscriptionRef.current = null;
+      }
+    } catch (err) {
+      console.error('Push bildirim kapatma hatası:', err);
+    }
+  }, []);
+
+  // ── Ayarlar veya konum değiştiğinde push aboneliğini güncelle ──
+  useEffect(() => {
+    if (!settings.pushEnabled || !pushSubscriptionRef.current) return;
+    syncPushSubscription(pushSubscriptionRef.current, currentLocation, settings);
+  }, [settings.calculationMethod, settings.asrMadhab, settings.alarms, currentLocation, settings.pushEnabled, syncPushSubscription]);
 
   // ── Konum Tespiti ──
   const refreshLocation = useCallback(async (forceRefresh = false) => {
@@ -276,7 +391,6 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
 
     try {
       if (settings.useAutoLocation) {
-        // Cache'den konum varsa ve zorla yenileme istenmemişse, cache kullan
         if (!forceRefresh) {
           const cached = loadLocationFromCache();
           if (cached) {
@@ -291,19 +405,15 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
         let lon: number | undefined;
         let city = '';
         let country = '';
-
-        // 1. Önce tarayıcı Geolocation API dene
         let source: LocationSource = 'default';
+
         try {
           const browserLoc = await getBrowserLocation();
           lat = browserLoc.lat;
           lon = browserLoc.lon;
           source = 'browser';
-        } catch {
-          // Tarayıcı konumu alınamadı — sessiz devam et
-        }
+        } catch {}
 
-        // 2. Geolocation başarısız olduysa, IP bazlı fallback dene
         if (lat === undefined || lon === undefined) {
           try {
             const ipLoc = await getIPLocation();
@@ -314,12 +424,9 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
               country = ipLoc.country;
               source = 'ip';
             }
-          } catch {
-            // IP lokasyon da başarısız — sessiz devam et
-          }
+          } catch {}
         }
 
-        // 3. Hala konum yoksa varsayılan İstanbul kullan
         if (lat === undefined || lon === undefined) {
           setCurrentLocation(DEFAULT_LOCATION);
           setLocationSource('default');
@@ -328,7 +435,6 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        // 4. Reverse geocode (şehir adı IP'den gelmediyse)
         if (!city || !country) {
           const geoInfo = await reverseGeocode(lat, lon);
           city = geoInfo.city || city;
@@ -339,12 +445,9 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
         const tzName = getTimezoneName();
 
         const resolved: ResolvedLocation = {
-          latitude: lat,
-          longitude: lon,
-          city: city || 'Bilinmiyor',
-          country: country || '',
-          timezone: tz,
-          timezoneName: tzName,
+          latitude: lat, longitude: lon,
+          city: city || 'Bilinmiyor', country: country || '',
+          timezone: tz, timezoneName: tzName,
         };
 
         setCurrentLocation(resolved);
@@ -354,19 +457,15 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
         const tz = getTimezoneOffset();
         const tzName = getTimezoneName();
         const manual: ResolvedLocation = {
-          latitude: settings.manualLatitude,
-          longitude: settings.manualLongitude,
-          city: settings.manualCity,
-          country: '',
-          timezone: tz,
-          timezoneName: tzName,
+          latitude: settings.manualLatitude, longitude: settings.manualLongitude,
+          city: settings.manualCity, country: '',
+          timezone: tz, timezoneName: tzName,
         };
         setCurrentLocation(manual);
         setLocationSource('manual');
         saveLocationToCache(manual, 'manual');
       }
     } catch {
-      // Herhangi bir hata durumunda sessizce varsayılana dön
       setCurrentLocation(DEFAULT_LOCATION);
     } finally {
       setIsLoading(false);
@@ -377,35 +476,22 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
   const calculatePrayerTimes = useCallback(() => {
     const calc = calculatorRef.current;
     const loc: Location = {
-      latitude: currentLocation.latitude,
-      longitude: currentLocation.longitude,
-      timezone: currentLocation.timezone,
-      city: currentLocation.city,
-      country: currentLocation.country,
+      latitude: currentLocation.latitude, longitude: currentLocation.longitude,
+      timezone: currentLocation.timezone, city: currentLocation.city, country: currentLocation.country,
     };
-
     const now = new Date();
     const result = calc.calculate(now, loc);
-
     setPrayerTimes(result.times);
     setIsHighLatitude(result.isHighLatitude);
     setMizanApplied(result.mizanApplied);
-
-    // Hicri tarih
-    try {
-      setHijriDate(gregorianToHijri(now));
-    } catch {
-      setHijriDate(null);
-    }
+    try { setHijriDate(gregorianToHijri(now)); } catch { setHijriDate(null); }
   }, [currentLocation]);
 
-  // ── Geri Sayım Güncelleme ──
+  // ── Geri Sayım ──
   const updateCountdown = useCallback(() => {
     if (!prayerTimes) return;
-
     const now = new Date();
     const result = getActivePrayer(prayerTimes, now, settings.calculationMethod);
-
     if (result) {
       setActivePrayer(result.active);
       setNextPrayer(result.next);
@@ -414,13 +500,9 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
   }, [prayerTimes, settings.calculationMethod]);
 
   // ── Effects ──
-  useEffect(() => {
-    refreshLocation();
-  }, []);
+  useEffect(() => { refreshLocation(); }, []);
 
-  useEffect(() => {
-    calculatePrayerTimes();
-  }, [currentLocation, settings.calculationMethod, settings.asrMadhab]);
+  useEffect(() => { calculatePrayerTimes(); }, [currentLocation, settings.calculationMethod, settings.asrMadhab]);
 
   useEffect(() => {
     updateCountdown();
@@ -428,12 +510,18 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, [prayerTimes]);
 
+  // Bildirim iznini takip et
+  useEffect(() => {
+    if ('Notification' in window) {
+      setPushPermission(Notification.permission);
+    }
+  }, []);
+
   // ── Ayar Güncelleme ──
   const updateSettings = useCallback((partial: Partial<AppSettings>) => {
     setSettings(prev => {
       const next = { ...prev, ...partial };
 
-      // Hesap yöntemi veya ikindi mezhebi değiştiyse hesaplayıcıyı güncelle
       if (partial.calculationMethod || partial.asrMadhab) {
         const method = partial.calculationMethod ?? prev.calculationMethod;
         const config = getMethodConfig(method);
@@ -441,27 +529,19 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
         calculatorRef.current.updateConfig(config, madhab);
       }
 
-      // Ayarları localStorage'a kaydet
       saveSettingsToCache(next);
-
       return next;
     });
   }, [getMethodConfig]);
 
-  // ── Bildirim Zamanlayıcı ──
-  // Daha önce gönderilmiş bildirimleri takip et (aynı bildirimi tekrar göndermemek için)
+  // ── Tarayıcı İçi Bildirim (sekme açıkken fallback) ──
   const notifiedRef = useRef<Set<string>>(new Set());
 
-  // Her gece yarısı bildirim takibini sıfırla
   useEffect(() => {
-    const resetNotified = () => {
-      notifiedRef.current = new Set();
-    };
-    // Her saat başı kontrol — gece yarısı geçildiğinde temizle
     const interval = setInterval(() => {
       const now = new Date();
       if (now.getHours() === 0 && now.getMinutes() === 0) {
-        resetNotified();
+        notifiedRef.current = new Set();
       }
     }, 60000);
     return () => clearInterval(interval);
@@ -469,11 +549,8 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!prayerTimes) return;
-
     const interval = setInterval(() => {
       const now = new Date();
-
-      // Bildirim izni kontrolü
       if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
       for (const p of getPrayerOrder(settings.calculationMethod)) {
@@ -483,62 +560,69 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
         const prayerTime = prayerTimes[p.key];
         const diff = prayerTime.getTime() - now.getTime();
 
-        // Vakit bildirimi: vaktin tam zamanında veya geçmiş ama 2 saniye içinde
         const prayerNotifKey = `prayer-${p.key}-${prayerTime.getTime()}`;
         if (diff <= 0 && diff > -2000 && !notifiedRef.current.has(prayerNotifKey)) {
           notifiedRef.current.add(prayerNotifKey);
-          try {
-            new Notification(`${p.label} Vakti`, {
+          // Service Worker üzerinden göster (daha güvenilir)
+          navigator.serviceWorker?.ready.then(reg => {
+            reg.showNotification(`${p.label} Vakti`, {
               body: `${p.label} vakti geldi: ${formatTime(prayerTime)}`,
               icon: '/favicon.ico',
               tag: `prayer-${p.key}`,
+              requireInteraction: true,
+              vibrate: [200, 100, 200],
             });
-          } catch {
-            // Bildirim gönderilemedi — sessiz devam et
-          }
+          }).catch(() => {
+            // Fallback: doğrudan Notification API
+            try {
+              new Notification(`${p.label} Vakti`, {
+                body: `${p.label} vakti geldi: ${formatTime(prayerTime)}`,
+                icon: '/favicon.ico',
+                tag: `prayer-${p.key}`,
+              });
+            } catch {}
+          });
         }
 
-        // Pre-alarm bildirimi
         if (alarm.preAlarm.enabled && alarm.preAlarm.minutes > 0) {
           const preAlarmDiff = diff - alarm.preAlarm.minutes * 60 * 1000;
           const preAlarmNotifKey = `prealarm-${p.key}-${prayerTime.getTime()}-${alarm.preAlarm.minutes}`;
           if (preAlarmDiff <= 0 && preAlarmDiff > -2000 && !notifiedRef.current.has(preAlarmNotifKey)) {
             notifiedRef.current.add(preAlarmNotifKey);
-            try {
-              new Notification(`${p.label} Yaklaşıyor`, {
+            navigator.serviceWorker?.ready.then(reg => {
+              reg.showNotification(`${p.label} Yaklaşıyor`, {
                 body: `${p.label} vaktine ${alarm.preAlarm.minutes} dakika kaldı`,
                 icon: '/favicon.ico',
                 tag: `prealarm-${p.key}`,
+                requireInteraction: true,
+                vibrate: [200, 100, 200],
               });
-            } catch {
-              // Bildirim gönderilemedi — sessiz devam et
-            }
+            }).catch(() => {
+              try {
+                new Notification(`${p.label} Yaklaşıyor`, {
+                  body: `${p.label} vaktine ${alarm.preAlarm.minutes} dakika kaldı`,
+                  icon: '/favicon.ico',
+                  tag: `prealarm-${p.key}`,
+                });
+              } catch {}
+            });
           }
         }
       }
     }, 1000);
-
     return () => clearInterval(interval);
   }, [prayerTimes, settings.alarms, settings.calculationMethod]);
 
   const prayerOrder = getPrayerOrder(settings.calculationMethod);
 
   const value: PrayerContextType = {
-    prayerTimes,
-    settings,
-    currentLocation,
-    hijriDate,
-    activePrayer,
-    nextPrayer,
-    countdown,
-    isLoading,
-    error,
-    isHighLatitude,
-    mizanApplied,
-    locationSource,
-    prayerOrder,
-    updateSettings,
-    refreshLocation,
+    prayerTimes, settings, currentLocation, hijriDate,
+    activePrayer, nextPrayer, countdown,
+    isLoading, error, isHighLatitude, mizanApplied,
+    locationSource, prayerOrder,
+    pushSupported, pushPermission,
+    updateSettings, refreshLocation,
+    enablePushNotifications, disablePushNotifications,
   };
 
   return (
