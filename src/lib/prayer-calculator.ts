@@ -14,15 +14,17 @@
 
 export type AsrType = 'evvel' | 'sani';
 
+export type CalculationMethod = 'suleymaniye' | 'diyanet' | 'mwl' | 'isna' | 'egyptian';
+
 export interface PrayerTimes {
-  seher: Date;       // Fecr-i Kâzib (-18°)
-  imsak: Date;       // Fecr-i Sâdık (-9°)
-  gunes: Date;       // Güneş Doğuşu (-0.833°)
-  ogle: Date;        // Zeval (Meridyen geçişi)
+  seher: Date;       // Fecr-i Kâzib (-18°) — sadece Süleymaniye
+  imsak: Date;       // Fecr-i Sâdık / Fajr
+  gunes: Date;       // Güneş Doğuşu / Sunrise
+  ogle: Date;        // Zeval (Meridyen geçişi) / Dhuhr
   ikindi: Date;      // Asr (gölge formülü)
-  aksam: Date;       // Güneş Batışı (-0.833°)
-  yatsi: Date;       // Kırmızı şafak kaybı (-9°)
-  yatsiSonu: Date;   // Akşam tarafı -18° (astronomik gece başlangıcı)
+  aksam: Date;       // Güneş Batışı / Maghrib
+  yatsi: Date;       // İşâ / Isha
+  yatsiSonu: Date;   // Akşam tarafı -18° — sadece Süleymaniye
 }
 
 export interface PrayerTimeResult {
@@ -31,6 +33,7 @@ export interface PrayerTimeResult {
   mizanApplied: boolean;
   declination: number;
   eqt: number;
+  method: CalculationMethod;
 }
 
 export interface Location {
@@ -43,18 +46,30 @@ export interface Location {
 
 export interface CalculatorConfig {
   asrType: AsrType;
+  method: CalculationMethod;
   seherAngle: number;    // Varsayılan: -18
-  imsakAngle: number;    // Varsayılan: -9
-  yatsiAngle: number;    // Varsayılan: -9
+  imsakAngle: number;    // Varsayılan: -9 (SV), -18 (Diyanet/MWL), -15 (ISNA), -19.5 (Egypt)
+  yatsiAngle: number;    // Varsayılan: -9 (SV), -17 (Diyanet/MWL), -15 (ISNA), -17.5 (Egypt)
   gunesRefraction: number; // Varsayılan: 0.833
+  temkin: number;        // Dakika cinsinden temkin (0 = SV, 2 = Diyanet)
 }
 
+export const METHOD_CONFIGS: Record<CalculationMethod, { imsakAngle: number; yatsiAngle: number; temkin: number; asrType: AsrType; label: string }> = {
+  suleymaniye: { imsakAngle: -9, yatsiAngle: -9, temkin: 0, asrType: 'evvel', label: 'Süleymaniye Vakfı (Mîzan)' },
+  diyanet:     { imsakAngle: -18, yatsiAngle: -17, temkin: 2, asrType: 'sani', label: 'Diyanet (Türkiye)' },
+  mwl:         { imsakAngle: -18, yatsiAngle: -17, temkin: 0, asrType: 'sani', label: 'Müslüman Dünyası Ligi (MWL)' },
+  isna:        { imsakAngle: -15, yatsiAngle: -15, temkin: 0, asrType: 'sani', label: 'ISNA (Kuzey Amerika)' },
+  egyptian:    { imsakAngle: -19.5, yatsiAngle: -17.5, temkin: 0, asrType: 'sani', label: 'Mısır Genel Meclisi' },
+};
+
 export const DEFAULT_CONFIG: CalculatorConfig = {
-  asrType: 'evvel',      // Süleymaniye Vakfı Asr-ı Evvel kullanır (t=1)
+  asrType: 'evvel',
+  method: 'suleymaniye',
   seherAngle: -18,
   imsakAngle: -9,
   yatsiAngle: -9,
   gunesRefraction: 0.833,
+  temkin: 0,
 };
 
 // ────────────────────────────────────────────────────────────
@@ -406,7 +421,7 @@ export class SuleymaniyePrayerCalculator {
   }
 
   /**
-   * Belirli bir tarih ve konum için 8 namaz vaktini hesaplar
+   * Belirli bir tarih ve konum için namaz vakitlerini hesaplar
    */
   calculate(date: Date, location: Location): PrayerTimeResult {
     const jd = julianDay(
@@ -425,24 +440,28 @@ export class SuleymaniyePrayerCalculator {
     const L = location.longitude;
     const tz = location.timezone;
 
+    const method = this.config.method;
+    const isSuleymaniye = method === 'suleymaniye';
+
     // ── Öğle (Zeval / Dhuhr) ──
     const dhuhr = dhuhrTime(L, tz, eqt);
 
     // ── Saat Açısı Hesaplamaları ──
-    
-    // Seher Vakti (Fecr-i Kâzib): -18°
-    const T_seher = hourAngle(this.config.seherAngle, phi, delta);
-    
-    // İmsak (Fecr-i Sâdık): -9°
+
+    // Seher Vakti (Fecr-i Kâzib): sadece Süleymaniye'de -18°
+    const seherAngle = isSuleymaniye ? this.config.seherAngle : -18;
+    const T_seher = hourAngle(seherAngle, phi, delta);
+
+    // İmsak (Fecr-i Sâdık / Fajr): yönteme göre farklı açılar
     const T_imsak = hourAngle(this.config.imsakAngle, phi, delta);
-    
+
     // Güneş Doğuşu: -0.833°
     const T_gunes = hourAngle(-this.config.gunesRefraction, phi, delta);
-    
+
     // Akşam (Güneş Batışı): -0.833°
     const T_aksam = T_gunes; // Simetrik
-    
-    // Yatsı: -9°
+
+    // Yatsı: yönteme göre farklı açılar
     const T_yatsi = hourAngle(this.config.yatsiAngle, phi, delta);
 
     // İkindi (Asr Gölge Formülü)
@@ -450,7 +469,7 @@ export class SuleymaniyePrayerCalculator {
     const A_asr = asrHourAngle(shadowFactor, phi, delta);
 
     // ── Vakit Hesaplamaları ──
-    
+
     let seherHour = fixHour(dhuhr - T_seher);
     let imsakHour = fixHour(dhuhr - T_imsak);
     let gunesHour = fixHour(dhuhr - T_gunes);
@@ -459,60 +478,70 @@ export class SuleymaniyePrayerCalculator {
     let aksamHour = fixHour(dhuhr + T_aksam);
     let yatsiHour = fixHour(dhuhr + T_yatsi);
 
-    // ── Yatsı Sonu ──
-    // Süleymaniye Vakfı: Yatsı Sonu = akşam tarafında Güneş -18° altına inerken
-    // Bu, Seher vaktinin (Fecr-i Kâzıb) akşam tarafındaki karşılığıdır
-    // (Astronomik gece başlangıcı = tam karanlık)
-    //
-    // Yatsı Sonu = Dhuhr + T(-18°) → T(-18) akşam saat açısı
+    // ── Yatsı Sonu (sadece Süleymaniye) ──
     const T_yatsiSonu = hourAngle(this.config.seherAngle, phi, delta);
 
     let yatsiSonuHour: number;
     let isHighLatitude = false;
     let mizanApplied = false;
 
-    // Yüksek enlem kontrolü: -9° veya -18°'ye inememe durumu
+    // Yüksek enlem kontrolü
     if (isNaN(T_imsak) || isNaN(T_yatsi) || isNaN(T_seher)) {
       isHighLatitude = true;
-      mizanApplied = true;
 
-      // Beyaz geceler: Sadece Mizan kuralını uygula
-      const mizan = applyMizanRule(aksamHour, gunesHour, imsakHour, yatsiHour);
-      
-      yatsiHour = mizan.yatsiHour;
-      yatsiSonuHour = mizan.yatsiSonuHour;
-      imsakHour = mizan.imsakHour;
-      seherHour = fixHour(imsakHour - 1); // Seher: İmsak'tan ~1 saat önce (Mizan'da)
+      // Beyaz geceler: Mizan kuralı (sadece Süleymaniye)
+      if (isSuleymaniye) {
+        mizanApplied = true;
+        const mizan = applyMizanRule(aksamHour, gunesHour, imsakHour, yatsiHour);
 
-      // Diğer vakitler hesaplanabilir olabilir, NaN ise düzelt
-      if (isNaN(T_imsak)) {
+        yatsiHour = mizan.yatsiHour;
+        yatsiSonuHour = mizan.yatsiSonuHour;
         imsakHour = mizan.imsakHour;
-      }
-      if (isNaN(T_seher)) {
         seherHour = fixHour(imsakHour - 1);
+
+        if (isNaN(T_imsak)) imsakHour = mizan.imsakHour;
+        if (isNaN(T_seher)) seherHour = fixHour(imsakHour - 1);
+      } else {
+        // Diğer yöntemler: gece yarısı kuralı (1/7 gece)
+        let nightDuration: number;
+        if (gunesHour < aksamHour) {
+          nightDuration = (24 - aksamHour) + gunesHour;
+        } else {
+          nightDuration = gunesHour - aksamHour;
+        }
+        const oneSeventh = nightDuration / 7;
+        yatsiHour = fixHour(aksamHour + oneSeventh);
+        imsakHour = fixHour(gunesHour - oneSeventh);
+        seherHour = imsakHour; // Seher = İmsak (diğer yöntemlerde aynı)
+        yatsiSonuHour = yatsiHour; // Yatsı Sonu = Yatsı (diğer yöntemlerde kullanılmaz)
       }
     } else if (isNaN(T_yatsiSonu)) {
-      // -18° akşam tarafında hesaplanamıyor ama -9° hesaplanabiliyor
-      // (Yüksek enlem ama çok aşırı değil)
-      // Gece süresi ile oransal hesaplama yap
       let nightDuration: number;
       if (gunesHour < aksamHour) {
         nightDuration = (24 - aksamHour) + gunesHour;
       } else {
         nightDuration = gunesHour - aksamHour;
       }
-
-      // Akşam→Yatsı süresi ile Akşam→YatsıSonu süresi arasındaki oranı kullan
-      // Yatsı = -9°, Yatsı Sonu = -18°, seher ile imsak arasını oranla
       const aksamToYatsi = yatsiHour - aksamHour;
-      const imsakToSeher = imsakHour - seherHour; // İmsak→Seher (sabah tarafı)
-      
-      // Akşam tarafı da benzer oranda uzamalı
+      const imsakToSeher = imsakHour - seherHour;
       yatsiSonuHour = fixHour(aksamHour + aksamToYatsi + imsakToSeher * 0.7);
     } else {
-      // Normal enlemler: Yatsı Sonu = Dhuhr + T(-18°) akşam tarafı
-      // Seher = Dhuhr - T(-18°) sabah tarafı → simetrik
       yatsiSonuHour = fixHour(dhuhr + T_yatsiSonu);
+    }
+
+    // ── Temkin (ihtiyat) uygulama ──
+    // Diyanet: +2 dk tüm vakitlere (geleneksel)
+    // SV: temkin uygulanmaz
+    if (this.config.temkin > 0) {
+      const t = this.config.temkin / 60; // Dakika → saat
+      imsakHour += t;
+      gunesHour += t;
+      ogleHour += t;
+      ikindiHour += t;
+      aksamHour += t;
+      yatsiHour += t;
+      seherHour += t;
+      yatsiSonuHour += t;
     }
 
     // ── Date Nesnelerine Dönüştür ──
@@ -532,7 +561,8 @@ export class SuleymaniyePrayerCalculator {
       isHighLatitude,
       mizanApplied,
       declination: delta,
-      eqt: eqt * 60, // Dakika cinsinden
+      eqt: eqt * 60,
+      method,
     };
   }
 
@@ -647,7 +677,8 @@ export interface PrayerInfo {
   icon: string;
 }
 
-export const PRAYER_ORDER: PrayerInfo[] = [
+// Süleymaniye Vakfı: 8 vakit
+export const PRAYER_ORDER_SV: PrayerInfo[] = [
   { key: 'seher', label: 'Seher Vakti', icon: '🌙' },
   { key: 'imsak', label: 'Sabah Namazı', icon: '🌅' },
   { key: 'gunes', label: 'Sabah Namazı Sonu', icon: '☀️' },
@@ -658,35 +689,54 @@ export const PRAYER_ORDER: PrayerInfo[] = [
   { key: 'yatsiSonu', label: 'Yatsı Sonu', icon: '🕐' },
 ];
 
+// Diğer yöntemler: 6 vakit
+export const PRAYER_ORDER_STANDARD: PrayerInfo[] = [
+  { key: 'imsak', label: 'İmsak', icon: '🌅' },
+  { key: 'gunes', label: 'Güneş', icon: '☀️' },
+  { key: 'ogle', label: 'Öğle', icon: '🌤️' },
+  { key: 'ikindi', label: 'İkindi', icon: '⛅' },
+  { key: 'aksam', label: 'Akşam', icon: '🌅' },
+  { key: 'yatsi', label: 'Yatsı', icon: '🌃' },
+];
+
+/** Geriye uyumluluk için */
+export const PRAYER_ORDER = PRAYER_ORDER_SV;
+
+export function getPrayerOrder(method: CalculationMethod): PrayerInfo[] {
+  return method === 'suleymaniye' ? PRAYER_ORDER_SV : PRAYER_ORDER_STANDARD;
+}
+
 /**
  * Şu anki aktif vakti ve sıradaki vakti bulur
  */
 export function getActivePrayer(
   times: PrayerTimes,
-  now: Date
+  now: Date,
+  method: CalculationMethod = 'suleymaniye'
 ): { active: PrayerInfo; next: PrayerInfo; timeUntilNext: number } | null {
-  const keys = PRAYER_ORDER.map(p => p.key);
+  const order = getPrayerOrder(method);
+  const keys = order.map(p => p.key);
 
   for (let i = keys.length - 1; i >= 0; i--) {
     const currentTime = times[keys[i]];
     if (now >= currentTime) {
-      const active = PRAYER_ORDER[i];
-      const nextIndex = (i + 1) % PRAYER_ORDER.length;
-      const next = PRAYER_ORDER[nextIndex];
+      const active = order[i];
+      const nextIndex = (i + 1) % order.length;
+      const next = order[nextIndex];
       const timeUntilNext = nextIndex === 0
-        ? 24 * 60 * 60 * 1000 // Yarın ilk vakte kadar (yaklaşık)
+        ? 24 * 60 * 60 * 1000
         : times[keys[nextIndex]].getTime() - now.getTime();
       return { active, next, timeUntilNext };
     }
   }
 
   // Şu an ilk vakitten önce
-  const active = PRAYER_ORDER[PRAYER_ORDER.length - 1]; // Yatsı Sonu (gece)
-  const next = PRAYER_ORDER[0]; // Seher
+  const active = order[order.length - 1];
+  const next = order[0];
   return {
     active,
     next,
-    timeUntilNext: times.seher.getTime() - now.getTime(),
+    timeUntilNext: times[keys[0]].getTime() - now.getTime(),
   };
 }
 

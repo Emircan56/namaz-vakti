@@ -7,7 +7,8 @@ import {
   type LocationSource,
 } from '@/lib/prayer-context';
 import {
-  PRAYER_ORDER,
+  METHOD_CONFIGS,
+  type CalculationMethod,
   formatTime,
   type PrayerTimes,
   type PrayerInfo,
@@ -62,6 +63,7 @@ function PrayerApp() {
     isHighLatitude,
     mizanApplied,
     locationSource,
+    prayerOrder,
     updateSettings,
     refreshLocation,
   } = usePrayerApp();
@@ -146,6 +148,7 @@ function PrayerApp() {
           nextPrayer={nextPrayer}
           settings={settings}
           updateSettings={updateSettings}
+          prayerOrder={prayerOrder}
         />
       </main>
 
@@ -419,12 +422,14 @@ function PrayerTimesList({
   nextPrayer,
   settings,
   updateSettings,
+  prayerOrder,
 }: {
   prayerTimes: PrayerTimes | null;
   activePrayer: PrayerInfo | null;
   nextPrayer: PrayerInfo | null;
   settings: any;
   updateSettings: (partial: any) => void;
+  prayerOrder: PrayerInfo[];
 }) {
   if (!prayerTimes) return null;
 
@@ -441,7 +446,7 @@ function PrayerTimesList({
 
       {/* Vakit Satırları */}
       <div>
-        {PRAYER_ORDER.map((prayer, index) => {
+        {prayerOrder.map((prayer, index) => {
           const time = prayerTimes[prayer.key];
           const isActive = activePrayer?.key === prayer.key;
           const isNext = nextPrayer?.key === prayer.key;
@@ -455,7 +460,7 @@ function PrayerTimesList({
                 ${isActive ? 'bg-islamic/8' : ''}
                 ${isPast ? 'opacity-35' : ''}
                 ${isNext ? 'bg-islamic/3' : ''}
-                ${index < PRAYER_ORDER.length - 1 ? 'border-b border-border/20' : ''}
+                ${index < prayerOrder.length - 1 ? 'border-b border-border/20' : ''}
                 hover:bg-accent/40 transition-all duration-200
               `}
             >
@@ -503,7 +508,7 @@ function PrayerTimesList({
 
       {/* Ayarlar Butonu */}
       <div className="px-4 py-3 border-t border-border/30 bg-muted/20">
-        <SettingsSheet settings={settings} updateSettings={updateSettings} />
+        <SettingsSheet settings={settings} updateSettings={updateSettings} prayerOrder={prayerOrder} />
       </div>
     </Card>
   );
@@ -516,9 +521,11 @@ function PrayerTimesList({
 function SettingsSheet({
   settings,
   updateSettings,
+  prayerOrder,
 }: {
   settings: any;
   updateSettings: (partial: any) => void;
+  prayerOrder: PrayerInfo[];
 }) {
   return (
     <Sheet>
@@ -538,13 +545,32 @@ function SettingsSheet({
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
+          {/* Hesaplama Yöntemi */}
+          <SettingsSection title="Hesaplama Yöntemi">
+            <Select
+              value={settings.calculationMethod}
+              onValueChange={(val) => updateSettings({ calculationMethod: val as CalculationMethod })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.entries(METHOD_CONFIGS) as [CalculationMethod, typeof METHOD_CONFIGS.suleymaniye][]).map(([key, mc]) => (
+                  <SelectItem key={key} value={key}>{mc.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingsSection>
+
+          <Separator />
+
           {/* Hatırlatıcılar */}
           <SettingsSection title="Vakit Hatırlatıcıları">
             <p className="text-xs text-muted-foreground mb-3">
               Her vakit için bildirim açıp kapatabilir, erken uyarı süresi seçebilirsiniz.
             </p>
             <div className="space-y-2">
-              {PRAYER_ORDER.map((prayer) => (
+              {prayerOrder.map((prayer) => (
                 <AlarmSetting
                   key={prayer.key}
                   prayer={prayer}

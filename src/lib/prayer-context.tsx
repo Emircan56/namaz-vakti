@@ -4,14 +4,18 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import {
   SuleymaniyePrayerCalculator,
   DEFAULT_CONFIG,
+  METHOD_CONFIGS,
   type PrayerTimes,
   type CalculatorConfig,
   type AsrType,
+  type CalculationMethod,
   gregorianToHijri,
   getActivePrayer,
+  getPrayerOrder,
   formatTime,
   formatCountdown,
-  PRAYER_ORDER,
+  PRAYER_ORDER_SV,
+  PRAYER_ORDER_STANDARD,
   type PrayerInfo,
   type Location,
 } from './prayer-calculator';
@@ -41,7 +45,7 @@ export interface PrayerAlarmSetting {
 }
 
 export interface AppSettings {
-  asrType: AsrType;
+  calculationMethod: CalculationMethod;
   alarms: Record<string, PrayerAlarmSetting>;
   location: ResolvedLocation;
   useAutoLocation: boolean;
@@ -69,6 +73,7 @@ interface PrayerContextType {
   isHighLatitude: boolean;
   mizanApplied: boolean;
   locationSource: LocationSource;
+  prayerOrder: PrayerInfo[];
   updateSettings: (partial: Partial<AppSettings>) => void;
   refreshLocation: () => Promise<void>;
 }
@@ -87,7 +92,7 @@ export function usePrayerApp() {
 
 function createDefaultAlarms(): Record<string, PrayerAlarmSetting> {
   const alarms: Record<string, PrayerAlarmSetting> = {};
-  for (const p of PRAYER_ORDER) {
+  for (const p of PRAYER_ORDER_SV) {
     alarms[p.key] = {
       vakit: p.key,
       alarm: true,
@@ -101,7 +106,7 @@ function createDefaultAlarms(): Record<string, PrayerAlarmSetting> {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
-  asrType: 'evvel',    // Süleymaniye Vakfı Asr-ı Evvel kullanır
+  calculationMethod: 'suleymaniye',
   alarms: createDefaultAlarms(),
   location: DEFAULT_LOCATION,
   useAutoLocation: true,
@@ -128,8 +133,20 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
   const [mizanApplied, setMizanApplied] = useState(false);
   const [locationSource, setLocationSource] = useState<LocationSource>('default');
 
+  // Hesaplayıcıyı yönteme göre oluştur
+  const getMethodConfig = useCallback((method: CalculationMethod): Partial<CalculatorConfig> => {
+    const mc = METHOD_CONFIGS[method];
+    return {
+      method,
+      imsakAngle: mc.imsakAngle,
+      yatsiAngle: mc.yatsiAngle,
+      asrType: mc.asrType,
+      temkin: mc.temkin,
+    };
+  }, []);
+
   const calculatorRef = useRef<SuleymaniyePrayerCalculator>(
-    new SuleymaniyePrayerCalculator({ asrType: DEFAULT_SETTINGS.asrType })
+    new SuleymaniyePrayerCalculator(getMethodConfig(DEFAULT_SETTINGS.calculationMethod))
   );
 
   // ── Konum Tespiti ──
@@ -251,14 +268,14 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
     if (!prayerTimes) return;
 
     const now = new Date();
-    const result = getActivePrayer(prayerTimes, now);
+    const result = getActivePrayer(prayerTimes, now, settings.calculationMethod);
 
     if (result) {
       setActivePrayer(result.active);
       setNextPrayer(result.next);
       setCountdown(formatCountdown(result.timeUntilNext));
     }
-  }, [prayerTimes]);
+  }, [prayerTimes, settings.calculationMethod]);
 
   // ── Effects ──
   useEffect(() => {
@@ -267,7 +284,7 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     calculatePrayerTimes();
-  }, [currentLocation, settings.asrType]);
+  }, [currentLocation, settings.calculationMethod]);
 
   useEffect(() => {
     updateCountdown();
@@ -279,15 +296,16 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
   const updateSettings = useCallback((partial: Partial<AppSettings>) => {
     setSettings(prev => {
       const next = { ...prev, ...partial };
-      
-      // Asr tipi değiştiyse hesaplayıcıyı güncelle
-      if (partial.asrType) {
-        calculatorRef.current.updateConfig({ asrType: partial.asrType });
+
+      // Hesap yöntemi değiştiyse hesaplayıcıyı güncelle
+      if (partial.calculationMethod) {
+        const config = getMethodConfig(partial.calculationMethod);
+        calculatorRef.current.updateConfig(config);
       }
 
       return next;
     });
-  }, []);
+  }, [getMethodConfig]);
 
   // ── Bildirim Zamanlayıcı ──
   useEffect(() => {
@@ -297,7 +315,7 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
     const interval = setInterval(() => {
       const now = new Date();
       
-      for (const p of PRAYER_ORDER) {
+      for (const p of getPrayerOrder(settings.calculationMethod)) {
         const alarm = settings.alarms[p.key];
         if (!alarm || !alarm.alarm) continue;
 
@@ -334,6 +352,8 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, [prayerTimes, settings.alarms]);
 
+  const prayerOrder = getPrayerOrder(settings.calculationMethod);
+
   const value: PrayerContextType = {
     prayerTimes,
     settings,
@@ -347,6 +367,7 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
     isHighLatitude,
     mizanApplied,
     locationSource,
+    prayerOrder,
     updateSettings,
     refreshLocation,
   };
