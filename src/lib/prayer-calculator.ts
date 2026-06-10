@@ -546,10 +546,13 @@ export class SuleymaniyePrayerCalculator {
     const day = baseDate.getDate();
 
     for (const [key, hour] of Object.entries(hours)) {
-      const h = Math.floor(hour);
-      const m = Math.floor((hour - h) * 60);
-      const s = Math.floor(((hour - h) * 60 - m) * 60);
-      result[key as keyof PrayerTimes] = new Date(year, month, day, h, m, s);
+      // Temkin: saniyeleri ileriye doğru yuvarla
+      // Herhangi bir saniye kesri varsa dakikayı bir ileri al
+      const totalMinutes = hour * 60;
+      const ceiledMinutes = Math.ceil(totalMinutes);
+      const h = Math.floor(ceiledMinutes / 60);
+      const m = ceiledMinutes % 60;
+      result[key as keyof PrayerTimes] = new Date(year, month, day, h, m, 0);
     }
 
     return result as PrayerTimes;
