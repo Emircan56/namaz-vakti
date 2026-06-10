@@ -163,6 +163,12 @@
   animation: glow-border 2s ease-in-out infinite;
 }
 
+/* Toast progress bar shrink */
+@keyframes shrink-bar {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
 /* Smooth transitions */
 .vakit-row {
   transition: all 0.3s ease;

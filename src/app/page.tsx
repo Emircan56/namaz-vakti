@@ -681,7 +681,7 @@ function AlarmSetting({
 }
 
 // ────────────────────────────────────────────────────────────
-// Konum Bildirim Banner'ı
+// Konum Bildirim Toast
 // ────────────────────────────────────────────────────────────
 
 function LocationBanner({
@@ -693,21 +693,45 @@ function LocationBanner({
   onDismiss: () => void;
   onRetry: () => Promise<void>;
 }) {
+  const [visible, setVisible] = useState(false);
   const isIP = source === 'ip';
-  const isDefault = source === 'default';
+
+  // Görünürlük animasyonu + otomatik kapanma
+  useEffect(() => {
+    // Girş animasyonu
+    requestAnimationFrame(() => setVisible(true));
+
+    // 8 saniye sonra otomatik kapan
+    const timer = setTimeout(() => {
+      setVisible(false);
+      setTimeout(onDismiss, 400); // Çıkış animasyonu bitince kaldır
+    }, 8000);
+
+    return () => clearTimeout(timer);
+  }, [onDismiss]);
+
+  const handleDismiss = useCallback(() => {
+    setVisible(false);
+    setTimeout(onDismiss, 400);
+  }, [onDismiss]);
 
   return (
-    <div className="w-full max-w-lg mx-auto px-4">
+    <div className={`
+      fixed bottom-4 left-4 right-4 z-50 flex justify-center
+      transition-all duration-400 ease-out
+      ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}
+    `}>
       <div className={`
-        relative rounded-lg border p-3 text-sm
+        w-full max-w-md rounded-xl border shadow-lg p-3 text-sm
         ${isIP
-          ? 'border-amber-500/40 bg-amber-50 dark:bg-amber-950/30'
-          : 'border-red-500/40 bg-red-50 dark:bg-red-950/30'
+          ? 'border-amber-500/40 bg-amber-50 dark:bg-amber-950/40'
+          : 'border-red-500/40 bg-red-50 dark:bg-red-950/40'
         }
+        backdrop-blur-sm
       `}>
         {/* Kapat butonu */}
         <button
-          onClick={onDismiss}
+          onClick={handleDismiss}
           className="absolute top-2 right-2 p-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
           aria-label="Kapat"
         >
@@ -736,7 +760,7 @@ function LocationBanner({
             </p>
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
               {isIP
-                ? 'Cihazınızın konum izni verilmediği için IP adresine göre yaklaşık konum kullanılıyor. Vakit hesaplamalarında sapma olabilir.'
+                ? 'Konum izni verilmediği için IP adresine göre yaklaşık konum kullanılıyor. Vakit hesaplamalarında sapma olabilir.'
                 : 'Cihaz konumu ve IP tabanlı konum alınamadı. Varsayılan İstanbul konumu kullanılıyor.'
               }
             </p>
@@ -750,13 +774,21 @@ function LocationBanner({
                 variant="outline"
                 size="sm"
                 className="h-7 text-xs gap-1.5"
-                onClick={onRetry}
+                onClick={async () => { await onRetry(); handleDismiss(); }}
               >
                 <Navigation className="w-3 h-3" />
                 Tekrar Dene
               </Button>
             </div>
           </div>
+        </div>
+
+        {/* İlerleme çubuğu (otomatik kapanma göstergesi) */}
+        <div className="mt-2 h-0.5 rounded-full overflow-hidden bg-black/5 dark:bg-white/5">
+          <div className={`
+            h-full rounded-full
+            ${isIP ? 'bg-amber-500/50' : 'bg-red-500/50'}
+          `} style={{ animation: 'shrink-bar 8s linear forwards' }} />
         </div>
       </div>
     </div>
