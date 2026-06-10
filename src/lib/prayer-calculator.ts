@@ -546,12 +546,14 @@ export class SuleymaniyePrayerCalculator {
     const day = baseDate.getDate();
 
     for (const [key, hour] of Object.entries(hours)) {
-      // Temkin: saniyeleri ileriye doğru yuvarla
-      // Herhangi bir saniye kesri varsa dakikayı bir ileri al
+      // "Son" vakitleri (güneş doğuşu, yatsı sonu) geriye yuvarla:
+      // Bu vakitler bir vaktin bitişi olduğundan, erken bitirme temkini uygulanır.
+      // Diğer tüm vakitler ileriye yuvarlanır (geç başlama temkini).
+      const isEndTime = key === 'gunes' || key === 'yatsiSonu';
       const totalMinutes = hour * 60;
-      const ceiledMinutes = Math.ceil(totalMinutes);
-      const h = Math.floor(ceiledMinutes / 60);
-      const m = ceiledMinutes % 60;
+      const roundedMinutes = isEndTime ? Math.floor(totalMinutes) : Math.ceil(totalMinutes);
+      const h = Math.floor(roundedMinutes / 60);
+      const m = roundedMinutes % 60;
       result[key as keyof PrayerTimes] = new Date(year, month, day, h, m, 0);
     }
 
