@@ -745,7 +745,11 @@ function LocationBanner({
   const [visible, setVisible] = useState(false);
   const isIP = source === 'ip';
   const onDismissRef = useRef(onDismiss);
-  onDismissRef.current = onDismiss;
+
+  // Ref'i effect içinde güncelle (render sırasında değil)
+  useEffect(() => {
+    onDismissRef.current = onDismiss;
+  }, [onDismiss]);
 
   // Görünürlük animasyonu + otomatik kapanma
   useEffect(() => {

@@ -35,7 +35,7 @@ import {
 
 export interface PreAlarmSetting {
   enabled: boolean;
-  minutes: number; // 15, 30, veya 45
+  minutes: number; // 5, 10, 15, 30, veya 45
 }
 
 export interface PrayerAlarmSetting {
@@ -134,6 +134,63 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 // ────────────────────────────────────────────────────────────
+// Ayar Kalıcılığı (localStorage)
+// ────────────────────────────────────────────────────────────
+
+const SETTINGS_CACHE_KEY = 'prayer_app_settings';
+
+/** Ayarları localStorage'a kaydet */
+function saveSettingsToCache(settings: AppSettings): void {
+  try {
+    // location alanını kaydetme (konum ayrı cache'leniyor)
+    const toSave = {
+      calculationMethod: settings.calculationMethod,
+      asrMadhab: settings.asrMadhab,
+      alarms: settings.alarms,
+      useAutoLocation: settings.useAutoLocation,
+      manualLatitude: settings.manualLatitude,
+      manualLongitude: settings.manualLongitude,
+      manualCity: settings.manualCity,
+    };
+    localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(toSave));
+  } catch {
+    // localStorage erişimi başarısız — sessiz devam et
+  }
+}
+
+/** Ayarları localStorage'dan yükle */
+function loadSettingsFromCache(): Partial<AppSettings> | null {
+  try {
+    const raw = localStorage.getItem(SETTINGS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/** Başlangıç ayarlarını oluştur (cache'den + varsayılan) */
+function getInitialSettings(): AppSettings {
+  const cached = loadSettingsFromCache();
+  if (!cached) return DEFAULT_SETTINGS;
+
+  return {
+    calculationMethod: cached.calculationMethod ?? DEFAULT_SETTINGS.calculationMethod,
+    asrMadhab: cached.asrMadhab ?? DEFAULT_SETTINGS.asrMadhab,
+    alarms: {
+      ...createDefaultAlarms(), // yeni eklenen vakitler için varsayılan
+      ...(cached.alarms ?? {}), // kaydedilmiş ayarlar öncelikli
+    },
+    location: DEFAULT_SETTINGS.location,
+    useAutoLocation: cached.useAutoLocation ?? DEFAULT_SETTINGS.useAutoLocation,
+    manualLatitude: cached.manualLatitude ?? DEFAULT_SETTINGS.manualLatitude,
+    manualLongitude: cached.manualLongitude ?? DEFAULT_SETTINGS.manualLongitude,
+    manualCity: cached.manualCity ?? DEFAULT_SETTINGS.manualCity,
+  };
+}
+
+// ────────────────────────────────────────────────────────────
 // Konum Cache Yardımcıları
 // ────────────────────────────────────────────────────────────
 
@@ -178,7 +235,7 @@ function loadLocationFromCache(): { location: ResolvedLocation; source: Location
 // ────────────────────────────────────────────────────────────
 
 export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
-  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<AppSettings>(getInitialSettings);
   const [currentLocation, setCurrentLocation] = useState<ResolvedLocation>(DEFAULT_LOCATION);
   const [prayerTimes, setPrayerTimes] = useState<PrayerTimes | null>(null);
   const [hijriDate, setHijriDate] = useState<ReturnType<typeof gregorianToHijri> | null>(null);
@@ -191,7 +248,9 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
   const [mizanApplied, setMizanApplied] = useState(false);
   const [locationSource, setLocationSource] = useState<LocationSource>('default');
 
-  // Hesaplayıcıyı yönteme göre oluştur
+  // Hesaplayıcıyı yönteme göre oluştur (başlangıç ayarlarından)
+  const initialSettings = useRef(getInitialSettings());
+
   const getMethodConfig = useCallback((method: CalculationMethod): Partial<CalculatorConfig> => {
     const mc = METHOD_CONFIGS[method];
     return {
@@ -204,7 +263,10 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const calculatorRef = useRef<SuleymaniyePrayerCalculator>(
-    new SuleymaniyePrayerCalculator(getMethodConfig(DEFAULT_SETTINGS.calculationMethod), DEFAULT_SETTINGS.asrMadhab)
+    new SuleymaniyePrayerCalculator(
+      getMethodConfig(initialSettings.current.calculationMethod),
+      initialSettings.current.asrMadhab
+    )
   );
 
   // ── Konum Tespiti ──
@@ -379,18 +441,41 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
         calculatorRef.current.updateConfig(config, madhab);
       }
 
+      // Ayarları localStorage'a kaydet
+      saveSettingsToCache(next);
+
       return next;
     });
   }, [getMethodConfig]);
 
   // ── Bildirim Zamanlayıcı ──
+  // Daha önce gönderilmiş bildirimleri takip et (aynı bildirimi tekrar göndermemek için)
+  const notifiedRef = useRef<Set<string>>(new Set());
+
+  // Her gece yarısı bildirim takibini sıfırla
+  useEffect(() => {
+    const resetNotified = () => {
+      notifiedRef.current = new Set();
+    };
+    // Her saat başı kontrol — gece yarısı geçildiğinde temizle
+    const interval = setInterval(() => {
+      const now = new Date();
+      if (now.getHours() === 0 && now.getMinutes() === 0) {
+        resetNotified();
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     if (!prayerTimes) return;
 
-    // Her saniye kontrol et
     const interval = setInterval(() => {
       const now = new Date();
-      
+
+      // Bildirim izni kontrolü
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
       for (const p of getPrayerOrder(settings.calculationMethod)) {
         const alarm = settings.alarms[p.key];
         if (!alarm || !alarm.alarm) continue;
@@ -398,27 +483,35 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
         const prayerTime = prayerTimes[p.key];
         const diff = prayerTime.getTime() - now.getTime();
 
-        // Vakit geldiğinde bildirim
-        if (diff > 0 && diff < 1000) {
-          if ('Notification' in window && Notification.permission === 'granted') {
+        // Vakit bildirimi: vaktin tam zamanında veya geçmiş ama 2 saniye içinde
+        const prayerNotifKey = `prayer-${p.key}-${prayerTime.getTime()}`;
+        if (diff <= 0 && diff > -2000 && !notifiedRef.current.has(prayerNotifKey)) {
+          notifiedRef.current.add(prayerNotifKey);
+          try {
             new Notification(`${p.label} Vakti`, {
               body: `${p.label} vakti geldi: ${formatTime(prayerTime)}`,
               icon: '/favicon.ico',
               tag: `prayer-${p.key}`,
             });
+          } catch {
+            // Bildirim gönderilemedi — sessiz devam et
           }
         }
 
-        // Pre-alarm
-        if (alarm.preAlarm.enabled) {
-          const preAlarmTime = diff - alarm.preAlarm.minutes * 60 * 1000;
-          if (preAlarmTime > 0 && preAlarmTime < 1000) {
-            if ('Notification' in window && Notification.permission === 'granted') {
+        // Pre-alarm bildirimi
+        if (alarm.preAlarm.enabled && alarm.preAlarm.minutes > 0) {
+          const preAlarmDiff = diff - alarm.preAlarm.minutes * 60 * 1000;
+          const preAlarmNotifKey = `prealarm-${p.key}-${prayerTime.getTime()}-${alarm.preAlarm.minutes}`;
+          if (preAlarmDiff <= 0 && preAlarmDiff > -2000 && !notifiedRef.current.has(preAlarmNotifKey)) {
+            notifiedRef.current.add(preAlarmNotifKey);
+            try {
               new Notification(`${p.label} Yaklaşıyor`, {
                 body: `${p.label} vaktine ${alarm.preAlarm.minutes} dakika kaldı`,
                 icon: '/favicon.ico',
                 tag: `prealarm-${p.key}`,
               });
+            } catch {
+              // Bildirim gönderilemedi — sessiz devam et
             }
           }
         }
@@ -426,7 +519,7 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [prayerTimes, settings.alarms]);
+  }, [prayerTimes, settings.alarms, settings.calculationMethod]);
 
   const prayerOrder = getPrayerOrder(settings.calculationMethod);
 
