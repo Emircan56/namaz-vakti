@@ -120,13 +120,13 @@ function PrayerApp() {
         currentTime={currentTime}
         isDark={isDark}
         onToggleDark={toggleDark}
-        onRefresh={refreshLocation}
+        onRefresh={() => refreshLocation(true)}
         error={error}
       />
 
       {/* Konum Bildirimi */}
       {locationSource !== 'browser' && locationSource !== 'manual' && !locationBannerDismissed && (
-        <LocationBanner source={locationSource} onDismiss={() => setLocationBannerDismissed(true)} onRetry={refreshLocation} />
+        <LocationBanner source={locationSource} onDismiss={() => setLocationBannerDismissed(true)} onRetry={() => refreshLocation(true)} />
       )}
 
       {/* Ana İçerik */}

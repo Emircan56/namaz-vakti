@@ -75,7 +75,7 @@ interface PrayerContextType {
   locationSource: LocationSource;
   prayerOrder: PrayerInfo[];
   updateSettings: (partial: Partial<AppSettings>) => void;
-  refreshLocation: () => Promise<void>;
+  refreshLocation: (forceRefresh?: boolean) => Promise<void>;
 }
 
 const PrayerAppContext = createContext<PrayerContextType | null>(null);
@@ -130,6 +130,46 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 // ────────────────────────────────────────────────────────────
+// Konum Cache Yardımcıları
+// ────────────────────────────────────────────────────────────
+
+const LOCATION_CACHE_KEY = 'prayer_app_cached_location';
+const LOCATION_SOURCE_CACHE_KEY = 'prayer_app_cached_location_source';
+
+interface CachedLocation extends ResolvedLocation {
+  _cachedAt: number; // epoch timestamp
+}
+
+function saveLocationToCache(loc: ResolvedLocation, source: LocationSource): void {
+  try {
+    const cached: CachedLocation = { ...loc, _cachedAt: Date.now() };
+    localStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(cached));
+    localStorage.setItem(LOCATION_SOURCE_CACHE_KEY, source);
+  } catch {
+    // localStorage erişimi başarısız — sessiz devam et
+  }
+}
+
+function loadLocationFromCache(): { location: ResolvedLocation; source: LocationSource } | null {
+  try {
+    const raw = localStorage.getItem(LOCATION_CACHE_KEY);
+    const source = localStorage.getItem(LOCATION_SOURCE_CACHE_KEY) as LocationSource | null;
+    if (!raw) return null;
+    const cached: CachedLocation = JSON.parse(raw);
+    // Cache geçerliliğini kontrol et (7 gün)
+    if (cached._cachedAt && Date.now() - cached._cachedAt > 7 * 24 * 60 * 60 * 1000) {
+      localStorage.removeItem(LOCATION_CACHE_KEY);
+      localStorage.removeItem(LOCATION_SOURCE_CACHE_KEY);
+      return null;
+    }
+    const { _cachedAt, ...loc } = cached;
+    return { location: loc as ResolvedLocation, source: (source as LocationSource) || 'default' };
+  } catch {
+    return null;
+  }
+}
+
+// ────────────────────────────────────────────────────────────
 // Provider
 // ────────────────────────────────────────────────────────────
 
@@ -164,12 +204,23 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
   );
 
   // ── Konum Tespiti ──
-  const refreshLocation = useCallback(async () => {
+  const refreshLocation = useCallback(async (forceRefresh = false) => {
     setIsLoading(true);
     setError(null);
 
     try {
       if (settings.useAutoLocation) {
+        // Cache'den konum varsa ve zorla yenileme istenmemişse, cache kullan
+        if (!forceRefresh) {
+          const cached = loadLocationFromCache();
+          if (cached) {
+            setCurrentLocation(cached.location);
+            setLocationSource(cached.source);
+            setIsLoading(false);
+            return;
+          }
+        }
+
         let lat: number | undefined;
         let lon: number | undefined;
         let city = '';
@@ -206,11 +257,10 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
         if (lat === undefined || lon === undefined) {
           setCurrentLocation(DEFAULT_LOCATION);
           setLocationSource('default');
+          saveLocationToCache(DEFAULT_LOCATION, 'default');
           setIsLoading(false);
           return;
         }
-
-        setLocationSource(source);
 
         // 4. Reverse geocode (şehir adı IP'den gelmediyse)
         if (!city || !country) {
@@ -222,26 +272,32 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
         const tz = getTimezoneOffset();
         const tzName = getTimezoneName();
 
-        setCurrentLocation({
+        const resolved: ResolvedLocation = {
           latitude: lat,
           longitude: lon,
           city: city || 'Bilinmiyor',
           country: country || '',
           timezone: tz,
           timezoneName: tzName,
-        });
+        };
+
+        setCurrentLocation(resolved);
+        setLocationSource(source);
+        saveLocationToCache(resolved, source);
       } else {
         const tz = getTimezoneOffset();
         const tzName = getTimezoneName();
-        setCurrentLocation({
+        const manual: ResolvedLocation = {
           latitude: settings.manualLatitude,
           longitude: settings.manualLongitude,
           city: settings.manualCity,
           country: '',
           timezone: tz,
           timezoneName: tzName,
-        });
+        };
+        setCurrentLocation(manual);
         setLocationSource('manual');
+        saveLocationToCache(manual, 'manual');
       }
     } catch {
       // Herhangi bir hata durumunda sessizce varsayılana dön
