@@ -51,3 +51,31 @@ Stage Summary:
 - Yatsı Sonu: 22:49 → 22:41 (2 min off from SV's 22:39, within tolerance)
 - All times within ±2 minutes of SV official calendar
 - Location now falls back silently: Browser API → IP API → Default (Istanbul)
+---
+Task ID: 1
+Agent: Main Agent
+Task: Add multiple prayer time calculation methods using Adhan library
+
+Work Log:
+- Installed `adhan` npm package (v4.4.3)
+- Updated `prayer-calculator.ts`:
+  - Added 12 calculation methods: suleymaniye, diyanet, mwl, isna, egyptian, karachi, ummalqura, dubai, qatar, kuwait, singapore, tehran
+  - Created `MethodConfig` interface with adhan mapping and SV-specific params
+  - Added `calculateWithAdhan()` function that uses adhan library for non-SV methods
+  - Proper timezone conversion: UTC → target timezone using `location.timezone` offset
+  - Updated `SuleymaniyePrayerCalculator.calculate()` to dispatch to adhan for non-SV methods
+  - Simplified SV-only code path (removed isSuleymaniye variable, removed temkin block)
+  - Fixed `getActivePrayer` next-day time calculation for wrapping prayer times
+- Updated `prayer-context.tsx`:
+  - Updated `getMethodConfig` with null coalescing for optional params
+  - Updated `createDefaultAlarms` to include both SV and standard prayer times
+- Updated `page.tsx`:
+  - Fixed METHOD_CONFIGS type casting for new MethodConfig interface
+  - Updated Footer to dynamically show method name (MÎZAN for SV, ADHAN + method name for others)
+  - Footer receives `method` prop from PrayerApp
+
+Stage Summary:
+- Non-SV methods now use Adhan library (well-tested, accurate calculations)
+- SV method keeps its custom Mîzan calculation
+- Conditional display: 8 times for SV, 6 times for other methods
+- Build succeeds with no TypeScript errors

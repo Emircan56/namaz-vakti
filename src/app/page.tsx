@@ -153,7 +153,7 @@ function PrayerApp() {
       </main>
 
       {/* Alt Bilgi */}
-      <Footer />
+      <Footer method={settings.calculationMethod} />
     </div>
   );
 }
@@ -555,7 +555,7 @@ function SettingsSheet({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(Object.entries(METHOD_CONFIGS) as [CalculationMethod, typeof METHOD_CONFIGS.suleymaniye][]).map(([key, mc]) => (
+                {(Object.entries(METHOD_CONFIGS) as [CalculationMethod, { label: string }][]).map(([key, mc]) => (
                   <SelectItem key={key} value={key}>{mc.label}</SelectItem>
                 ))}
               </SelectContent>
@@ -827,16 +827,23 @@ function LocationBanner({
 // Alt Bilgi
 // ────────────────────────────────────────────────────────────
 
-function Footer() {
+function Footer({ method }: { method: CalculationMethod }) {
+  const isSuleymaniye = method === 'suleymaniye';
+  const methodLabel = METHOD_CONFIGS[method].label;
+
   return (
     <footer className="w-full py-3 px-4 text-center">
       <div className="flex items-center justify-center gap-2 mb-1">
         <div className="h-px w-8 bg-islamic/20" />
-        <span className="text-xs text-islamic/60 font-medium">MÎZAN</span>
+        {isSuleymaniye ? (
+          <span className="text-xs text-islamic/60 font-medium">MÎZAN</span>
+        ) : (
+          <span className="text-xs text-islamic/60 font-medium">ADHAN</span>
+        )}
         <div className="h-px w-8 bg-islamic/20" />
       </div>
       <p className="text-[10px] text-muted-foreground/50">
-        Süleymaniye Vakfı &middot; Mîzan Metodolojisi
+        {isSuleymaniye ? 'Süleymaniye Vakfı · Mîzan Metodolojisi' : methodLabel}
       </p>
     </footer>
   );

@@ -92,6 +92,7 @@ export function usePrayerApp() {
 
 function createDefaultAlarms(): Record<string, PrayerAlarmSetting> {
   const alarms: Record<string, PrayerAlarmSetting> = {};
+  // SV vakitleri için varsayılan alarm ayarları
   for (const p of PRAYER_ORDER_SV) {
     alarms[p.key] = {
       vakit: p.key,
@@ -101,6 +102,19 @@ function createDefaultAlarms(): Record<string, PrayerAlarmSetting> {
         minutes: p.key === 'seher' ? 30 : 15,
       },
     };
+  }
+  // Standart vakitler için de ekle
+  for (const p of PRAYER_ORDER_STANDARD) {
+    if (!alarms[p.key]) {
+      alarms[p.key] = {
+        vakit: p.key,
+        alarm: true,
+        preAlarm: {
+          enabled: p.key === 'imsak',
+          minutes: 15,
+        },
+      };
+    }
   }
   return alarms;
 }
@@ -138,10 +152,10 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
     const mc = METHOD_CONFIGS[method];
     return {
       method,
-      imsakAngle: mc.imsakAngle,
-      yatsiAngle: mc.yatsiAngle,
-      asrType: mc.asrType,
-      temkin: mc.temkin,
+      imsakAngle: mc.imsakAngle ?? DEFAULT_CONFIG.imsakAngle,
+      yatsiAngle: mc.yatsiAngle ?? DEFAULT_CONFIG.yatsiAngle,
+      asrType: mc.asrType ?? DEFAULT_CONFIG.asrType,
+      temkin: mc.temkin ?? DEFAULT_CONFIG.temkin,
     };
   }, []);
 

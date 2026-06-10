@@ -1,12 +1,22 @@
 /**
- * Süleymaniye Vakfı Namaz Vakti Hesaplama Motoru
+ * Namaz Vakti Hesaplama Motoru
  * =================================================
- * Fıkhî-astronomik metodolojiye dayalı hesaplama sınıfı.
- * MWL, ISNA vb. kurumların alacakaranlık açıları ve suni yüksek enlem
- * kuralları KESİNLİKLE kullanılmamaktadır.
+ * Süleymaniye Vakfı: Fıkhî-astronomik Mîzan metodolojisi (özel hesaplama)
+ * Diğer yöntemler: Adhan kütüphanesi kullanılarak hesaplanır
  *
- * Temel kaynak: Süleymaniye Vakfı Mîzan sistemi
+ * Temel kaynak: Süleymaniye Vakfı Mîzan sistemi / Adhan kütüphanesi
  */
+
+import {
+  CalculationMethod as AdhanCalculationMethod,
+  CalculationParameters,
+  Coordinates,
+  HighLatitudeRule,
+  Madhab,
+  PolarCircleResolution,
+  PrayerTimes as AdhanPrayerTimes,
+  Rounding,
+} from 'adhan';
 
 // ────────────────────────────────────────────────────────────
 // Tip Tanımlamaları
@@ -14,7 +24,19 @@
 
 export type AsrType = 'evvel' | 'sani';
 
-export type CalculationMethod = 'suleymaniye' | 'diyanet' | 'mwl' | 'isna' | 'egyptian';
+export type CalculationMethod =
+  | 'suleymaniye'  // Süleymaniye Vakfı (Mîzan) — özel hesaplama
+  | 'diyanet'      // Diyanet (Türkiye) — Adhan: Turkey
+  | 'mwl'          // Müslüman Dünyası Ligi — Adhan: MuslimWorldLeague
+  | 'isna'         // ISNA (Kuzey Amerika) — Adhan: NorthAmerica
+  | 'egyptian'     // Mısır Genel Meclisi — Adhan: Egyptian
+  | 'karachi'      // University of Islamic Sciences, Karachi — Adhan: Karachi
+  | 'ummalqura'    // Ümmü'l-Kurâ (Mekke) — Adhan: UmmAlQura
+  | 'dubai'        // Dubai (BAE) — Adhan: Dubai
+  | 'qatar'        // Katar — Adhan: Qatar
+  | 'kuwait'       // Kuveyt — Adhan: Kuwait
+  | 'singapore'    // Singapur — Adhan: Singapore
+  | 'tehran';      // Tahran — Adhan: Tehran
 
 export interface PrayerTimes {
   seher: Date;       // Fecr-i Kâzib (-18°) — sadece Süleymaniye
@@ -54,12 +76,32 @@ export interface CalculatorConfig {
   temkin: number;        // Dakika cinsinden temkin (0 = SV, 2 = Diyanet)
 }
 
-export const METHOD_CONFIGS: Record<CalculationMethod, { imsakAngle: number; yatsiAngle: number; temkin: number; asrType: AsrType; label: string }> = {
-  suleymaniye: { imsakAngle: -9, yatsiAngle: -9, temkin: 0, asrType: 'evvel', label: 'Süleymaniye Vakfı (Mîzan)' },
-  diyanet:     { imsakAngle: -18, yatsiAngle: -17, temkin: 2, asrType: 'sani', label: 'Diyanet (Türkiye)' },
-  mwl:         { imsakAngle: -18, yatsiAngle: -17, temkin: 0, asrType: 'sani', label: 'Müslüman Dünyası Ligi (MWL)' },
-  isna:        { imsakAngle: -15, yatsiAngle: -15, temkin: 0, asrType: 'sani', label: 'ISNA (Kuzey Amerika)' },
-  egyptian:    { imsakAngle: -19.5, yatsiAngle: -17.5, temkin: 0, asrType: 'sani', label: 'Mısır Genel Meclisi' },
+export interface MethodConfig {
+  label: string;
+  /** Adhan kütüphanesi yöntem adı (sadece non-SV için) */
+  adhanMethod?: string;
+  /** SV hesaplama parametreleri (sadece SV için) */
+  imsakAngle?: number;
+  yatsiAngle?: number;
+  temkin?: number;
+  asrType?: AsrType;
+  /** Hanafi mezhebi mi? (ikindi için) */
+  hanafi?: boolean;
+}
+
+export const METHOD_CONFIGS: Record<CalculationMethod, MethodConfig> = {
+  suleymaniye:  { label: 'Süleymaniye Vakfı (Mîzan)', imsakAngle: -9, yatsiAngle: -9, temkin: 0, asrType: 'evvel', hanafi: false },
+  diyanet:      { label: 'Diyanet (Türkiye)', adhanMethod: 'Turkey', hanafi: true },
+  mwl:          { label: 'Müslüman Dünyası Ligi', adhanMethod: 'MuslimWorldLeague', hanafi: false },
+  isna:         { label: 'ISNA (Kuzey Amerika)', adhanMethod: 'NorthAmerica', hanafi: false },
+  egyptian:     { label: 'Mısır Genel Meclisi', adhanMethod: 'Egyptian', hanafi: false },
+  karachi:      { label: 'Karachi', adhanMethod: 'Karachi', hanafi: false },
+  ummalqura:    { label: 'Ümmü\'l-Kurâ (Mekke)', adhanMethod: 'UmmAlQura', hanafi: false },
+  dubai:        { label: 'Dubai (BAE)', adhanMethod: 'Dubai', hanafi: true },
+  qatar:        { label: 'Katar', adhanMethod: 'Qatar', hanafi: false },
+  kuwait:       { label: 'Kuveyt', adhanMethod: 'Kuwait', hanafi: false },
+  singapore:    { label: 'Singapur', adhanMethod: 'Singapore', hanafi: false },
+  tehran:       { label: 'Tahran', adhanMethod: 'Tehran', hanafi: false },
 };
 
 export const DEFAULT_CONFIG: CalculatorConfig = {
@@ -71,6 +113,103 @@ export const DEFAULT_CONFIG: CalculatorConfig = {
   gunesRefraction: 0.833,
   temkin: 0,
 };
+
+/**
+ * Adhan kütüphanesinden hesaplama parametrelerini alır
+ */
+function getAdhanParams(method: CalculationMethod): CalculationParameters {
+  const config = METHOD_CONFIGS[method];
+  const adhanMethod = config.adhanMethod;
+
+  if (!adhanMethod) {
+    // SV için MWL kullanılır ama sonuç göz ardı edilir
+    return AdhanCalculationMethod.MuslimWorldLeague();
+  }
+
+  switch (adhanMethod) {
+    case 'MuslimWorldLeague': return AdhanCalculationMethod.MuslimWorldLeague();
+    case 'Egyptian': return AdhanCalculationMethod.Egyptian();
+    case 'Karachi': return AdhanCalculationMethod.Karachi();
+    case 'UmmAlQura': return AdhanCalculationMethod.UmmAlQura();
+    case 'Dubai': return AdhanCalculationMethod.Dubai();
+    case 'MoonsightingCommittee': return AdhanCalculationMethod.MoonsightingCommittee();
+    case 'NorthAmerica': return AdhanCalculationMethod.NorthAmerica();
+    case 'Kuwait': return AdhanCalculationMethod.Kuwait();
+    case 'Qatar': return AdhanCalculationMethod.Qatar();
+    case 'Singapore': return AdhanCalculationMethod.Singapore();
+    case 'Tehran': return AdhanCalculationMethod.Tehran();
+    case 'Turkey': return AdhanCalculationMethod.Turkey();
+    default: return AdhanCalculationMethod.MuslimWorldLeague();
+  }
+}
+
+/**
+ * Adhan kütüphanesi ile namaz vakitlerini hesaplar
+ */
+function calculateWithAdhan(date: Date, location: Location, method: CalculationMethod): PrayerTimeResult {
+  const coords = new Coordinates(location.latitude, location.longitude);
+  const params = getAdhanParams(method);
+
+  // Hanafi mezhebi için ikindi ayarı
+  const config = METHOD_CONFIGS[method];
+  if (config.hanafi) {
+    params.madhab = Madhab.Hanafi;
+  }
+
+  // Yüksek enlem kuralı
+  params.highLatitudeRule = HighLatitudeRule.recommended(coords);
+
+  // Kutup dairesi çözümleme
+  params.polarCircleResolution = PolarCircleResolution.AqrabYaum;
+
+  // Yuvarlama: yukarı (temkin amaçlı)
+  params.rounding = Rounding.Up;
+
+  // Adhan hesaplama
+  const adhanTimes = new AdhanPrayerTimes(coords, date, params);
+
+  // Sonuçları PrayerTimes formatına dönüştür
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const day = date.getDate();
+
+  // Adhan UTC tarihlerini hedef saat dilimine çevir
+  // Adhan kütüphanesi UTC Date nesneleri döndürür.
+  // location.timezone offset (saat cinsinden) kullanarak yerel saate çeviririz.
+  const tzOffset = location.timezone; // saat cinsinden (örn: 3 for UTC+3)
+
+  // UTC saati + timezone offset = yerel saat
+  const toLocalTime = (utcDate: Date): Date => {
+    const utcHours = utcDate.getUTCHours();
+    const utcMinutes = utcDate.getUTCMinutes();
+    // UTC dakikalarını hesapla + timezone offset (dakika cinsinden)
+    const totalLocalMinutes = (utcHours * 60 + utcMinutes) + (tzOffset * 60);
+    const localHours = Math.floor(totalLocalMinutes / 60) % 24;
+    const localMinutes = totalLocalMinutes % 60;
+    const adjustedHours = localHours < 0 ? localHours + 24 : localHours;
+    return new Date(year, month, day, adjustedHours, localMinutes, 0);
+  };
+
+  const times: PrayerTimes = {
+    seher: new Date(year, month, day, 0, 0, 0),       // Kullanılmayacak
+    imsak: toLocalTime(adhanTimes.fajr),
+    gunes: toLocalTime(adhanTimes.sunrise),
+    ogle: toLocalTime(adhanTimes.dhuhr),
+    ikindi: toLocalTime(adhanTimes.asr),
+    aksam: toLocalTime(adhanTimes.maghrib),
+    yatsi: toLocalTime(adhanTimes.isha),
+    yatsiSonu: new Date(year, month, day, 0, 0, 0),   // Kullanılmayacak
+  };
+
+  return {
+    times,
+    isHighLatitude: false, // Adhan kendi yüksek enlem kurallarını uygular
+    mizanApplied: false,
+    declination: 0,
+    eqt: 0,
+    method,
+  };
+}
 
 // ────────────────────────────────────────────────────────────
 // Yardımcı Fonksiyonlar
@@ -422,8 +561,18 @@ export class SuleymaniyePrayerCalculator {
 
   /**
    * Belirli bir tarih ve konum için namaz vakitlerini hesaplar
+   * Süleymaniye Vakfı: Özel Mîzan hesaplaması
+   * Diğer yöntemler: Adhan kütüphanesi
    */
   calculate(date: Date, location: Location): PrayerTimeResult {
+    const method = this.config.method;
+
+    // Süleymaniye Vakfı dışındaki yöntemler Adhan kütüphanesi ile hesaplanır
+    if (method !== 'suleymaniye') {
+      return calculateWithAdhan(date, location, method);
+    }
+
+    // ── Süleymaniye Vakfı Mîzan Hesaplaması ──
     const jd = julianDay(
       date.getUTCFullYear(),
       date.getUTCMonth() + 1,
@@ -440,17 +589,13 @@ export class SuleymaniyePrayerCalculator {
     const L = location.longitude;
     const tz = location.timezone;
 
-    const method = this.config.method;
-    const isSuleymaniye = method === 'suleymaniye';
-
     // ── Öğle (Zeval / Dhuhr) ──
     const dhuhr = dhuhrTime(L, tz, eqt);
 
     // ── Saat Açısı Hesaplamaları ──
 
-    // Seher Vakti (Fecr-i Kâzib): sadece Süleymaniye'de -18°
-    const seherAngle = isSuleymaniye ? this.config.seherAngle : -18;
-    const T_seher = hourAngle(seherAngle, phi, delta);
+    // Seher Vakti (Fecr-i Kâzib): -18°
+    const T_seher = hourAngle(this.config.seherAngle, phi, delta);
 
     // İmsak (Fecr-i Sâdık / Fajr): yönteme göre farklı açılar
     const T_imsak = hourAngle(this.config.imsakAngle, phi, delta);
@@ -485,36 +630,19 @@ export class SuleymaniyePrayerCalculator {
     let isHighLatitude = false;
     let mizanApplied = false;
 
-    // Yüksek enlem kontrolü
+    // Yüksek enlem kontrolü (sadece SV için bu kod yolu)
     if (isNaN(T_imsak) || isNaN(T_yatsi) || isNaN(T_seher)) {
       isHighLatitude = true;
+      mizanApplied = true;
+      const mizan = applyMizanRule(aksamHour, gunesHour, imsakHour, yatsiHour);
 
-      // Beyaz geceler: Mizan kuralı (sadece Süleymaniye)
-      if (isSuleymaniye) {
-        mizanApplied = true;
-        const mizan = applyMizanRule(aksamHour, gunesHour, imsakHour, yatsiHour);
+      yatsiHour = mizan.yatsiHour;
+      yatsiSonuHour = mizan.yatsiSonuHour;
+      imsakHour = mizan.imsakHour;
+      seherHour = fixHour(imsakHour - 1);
 
-        yatsiHour = mizan.yatsiHour;
-        yatsiSonuHour = mizan.yatsiSonuHour;
-        imsakHour = mizan.imsakHour;
-        seherHour = fixHour(imsakHour - 1);
-
-        if (isNaN(T_imsak)) imsakHour = mizan.imsakHour;
-        if (isNaN(T_seher)) seherHour = fixHour(imsakHour - 1);
-      } else {
-        // Diğer yöntemler: gece yarısı kuralı (1/7 gece)
-        let nightDuration: number;
-        if (gunesHour < aksamHour) {
-          nightDuration = (24 - aksamHour) + gunesHour;
-        } else {
-          nightDuration = gunesHour - aksamHour;
-        }
-        const oneSeventh = nightDuration / 7;
-        yatsiHour = fixHour(aksamHour + oneSeventh);
-        imsakHour = fixHour(gunesHour - oneSeventh);
-        seherHour = imsakHour; // Seher = İmsak (diğer yöntemlerde aynı)
-        yatsiSonuHour = yatsiHour; // Yatsı Sonu = Yatsı (diğer yöntemlerde kullanılmaz)
-      }
+      if (isNaN(T_imsak)) imsakHour = mizan.imsakHour;
+      if (isNaN(T_seher)) seherHour = fixHour(imsakHour - 1);
     } else if (isNaN(T_yatsiSonu)) {
       let nightDuration: number;
       if (gunesHour < aksamHour) {
@@ -527,21 +655,6 @@ export class SuleymaniyePrayerCalculator {
       yatsiSonuHour = fixHour(aksamHour + aksamToYatsi + imsakToSeher * 0.7);
     } else {
       yatsiSonuHour = fixHour(dhuhr + T_yatsiSonu);
-    }
-
-    // ── Temkin (ihtiyat) uygulama ──
-    // Diyanet: +2 dk tüm vakitlere (geleneksel)
-    // SV: temkin uygulanmaz
-    if (this.config.temkin > 0) {
-      const t = this.config.temkin / 60; // Dakika → saat
-      imsakHour += t;
-      gunesHour += t;
-      ogleHour += t;
-      ikindiHour += t;
-      aksamHour += t;
-      yatsiHour += t;
-      seherHour += t;
-      yatsiSonuHour += t;
     }
 
     // ── Date Nesnelerine Dönüştür ──
@@ -723,9 +836,13 @@ export function getActivePrayer(
       const active = order[i];
       const nextIndex = (i + 1) % order.length;
       const next = order[nextIndex];
-      const timeUntilNext = nextIndex === 0
-        ? 24 * 60 * 60 * 1000
-        : times[keys[nextIndex]].getTime() - now.getTime();
+      // Gece yarısını geçen vakit (ertesi gün) için hesaplama
+      let nextTime = times[keys[nextIndex]];
+      if (nextIndex === 0) {
+        // İlk vaktin ertesi gün olduğunu varsay
+        nextTime = new Date(nextTime.getTime() + 24 * 60 * 60 * 1000);
+      }
+      const timeUntilNext = nextTime.getTime() - now.getTime();
       return { active, next, timeUntilNext };
     }
   }
