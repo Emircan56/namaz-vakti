@@ -91,7 +91,7 @@ export interface MethodConfig {
 
 export const METHOD_CONFIGS: Record<CalculationMethod, MethodConfig> = {
   suleymaniye:  { label: 'Süleymaniye Vakfı (Mîzan)', imsakAngle: -9, yatsiAngle: -9, temkin: 0, asrType: 'evvel', hanafi: false },
-  diyanet:      { label: 'Diyanet (Türkiye)', adhanMethod: 'Turkey', hanafi: true },
+  diyanet:      { label: 'Diyanet (Türkiye)', adhanMethod: 'Turkey', hanafi: false },
   mwl:          { label: 'Müslüman Dünyası Ligi', adhanMethod: 'MuslimWorldLeague', hanafi: false },
   isna:         { label: 'ISNA (Kuzey Amerika)', adhanMethod: 'NorthAmerica', hanafi: false },
   egyptian:     { label: 'Mısır Genel Meclisi', adhanMethod: 'Egyptian', hanafi: false },
@@ -145,14 +145,15 @@ function getAdhanParams(method: CalculationMethod): CalculationParameters {
 
 /**
  * Adhan kütüphanesi ile namaz vakitlerini hesaplar
+ * @param asrMadhab - İkindi mezhebi seçimi: 'standard' (Shafi'i) veya 'hanafi'
  */
-function calculateWithAdhan(date: Date, location: Location, method: CalculationMethod): PrayerTimeResult {
+function calculateWithAdhan(date: Date, location: Location, method: CalculationMethod, asrMadhab?: 'standard' | 'hanafi'): PrayerTimeResult {
   const coords = new Coordinates(location.latitude, location.longitude);
   const params = getAdhanParams(method);
 
-  // Hanafi mezhebi için ikindi ayarı
-  const config = METHOD_CONFIGS[method];
-  if (config.hanafi) {
+  // İkindi mezhebi ayarı: kullanıcı seçimi öncelikli, sonra yöntem varsayılanı
+  const useHanafi = asrMadhab === 'hanafi' || (asrMadhab === undefined && METHOD_CONFIGS[method].hanafi);
+  if (useHanafi) {
     params.madhab = Madhab.Hanafi;
   }
 
@@ -554,9 +555,11 @@ function applyMizanRule(
 
 export class SuleymaniyePrayerCalculator {
   private config: CalculatorConfig;
+  private _asrMadhab: 'standard' | 'hanafi';
 
-  constructor(config: Partial<CalculatorConfig> = {}) {
+  constructor(config: Partial<CalculatorConfig> = {}, asrMadhab: 'standard' | 'hanafi' = 'standard') {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this._asrMadhab = asrMadhab;
   }
 
   /**
@@ -569,7 +572,7 @@ export class SuleymaniyePrayerCalculator {
 
     // Süleymaniye Vakfı dışındaki yöntemler Adhan kütüphanesi ile hesaplanır
     if (method !== 'suleymaniye') {
-      return calculateWithAdhan(date, location, method);
+      return calculateWithAdhan(date, location, method, this._asrMadhab);
     }
 
     // ── Süleymaniye Vakfı Mîzan Hesaplaması ──
@@ -706,8 +709,11 @@ export class SuleymaniyePrayerCalculator {
   /**
    * Ayarları günceller
    */
-  updateConfig(config: Partial<CalculatorConfig>): void {
+  updateConfig(config: Partial<CalculatorConfig>, asrMadhab?: 'standard' | 'hanafi'): void {
     this.config = { ...this.config, ...config };
+    if (asrMadhab !== undefined) {
+      this._asrMadhab = asrMadhab;
+    }
   }
 
   getConfig(): CalculatorConfig {

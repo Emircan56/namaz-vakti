@@ -44,8 +44,11 @@ export interface PrayerAlarmSetting {
   preAlarm: PreAlarmSetting;
 }
 
+export type AsrMadhab = 'standard' | 'hanafi';
+
 export interface AppSettings {
   calculationMethod: CalculationMethod;
+  asrMadhab: AsrMadhab;
   alarms: Record<string, PrayerAlarmSetting>;
   location: ResolvedLocation;
   useAutoLocation: boolean;
@@ -121,6 +124,7 @@ function createDefaultAlarms(): Record<string, PrayerAlarmSetting> {
 
 const DEFAULT_SETTINGS: AppSettings = {
   calculationMethod: 'suleymaniye',
+  asrMadhab: 'standard',
   alarms: createDefaultAlarms(),
   location: DEFAULT_LOCATION,
   useAutoLocation: true,
@@ -200,7 +204,7 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const calculatorRef = useRef<SuleymaniyePrayerCalculator>(
-    new SuleymaniyePrayerCalculator(getMethodConfig(DEFAULT_SETTINGS.calculationMethod))
+    new SuleymaniyePrayerCalculator(getMethodConfig(DEFAULT_SETTINGS.calculationMethod), DEFAULT_SETTINGS.asrMadhab)
   );
 
   // ── Konum Tespiti ──
@@ -354,7 +358,7 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     calculatePrayerTimes();
-  }, [currentLocation, settings.calculationMethod]);
+  }, [currentLocation, settings.calculationMethod, settings.asrMadhab]);
 
   useEffect(() => {
     updateCountdown();
@@ -367,10 +371,12 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
     setSettings(prev => {
       const next = { ...prev, ...partial };
 
-      // Hesap yöntemi değiştiyse hesaplayıcıyı güncelle
-      if (partial.calculationMethod) {
-        const config = getMethodConfig(partial.calculationMethod);
-        calculatorRef.current.updateConfig(config);
+      // Hesap yöntemi veya ikindi mezhebi değiştiyse hesaplayıcıyı güncelle
+      if (partial.calculationMethod || partial.asrMadhab) {
+        const method = partial.calculationMethod ?? prev.calculationMethod;
+        const config = getMethodConfig(method);
+        const madhab = partial.asrMadhab ?? prev.asrMadhab;
+        calculatorRef.current.updateConfig(config, madhab);
       }
 
       return next;

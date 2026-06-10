@@ -5,6 +5,7 @@ import {
   PrayerAppProvider,
   usePrayerApp,
   type LocationSource,
+  type AsrMadhab,
 } from '@/lib/prayer-context';
 import {
   METHOD_CONFIGS,
@@ -560,6 +561,28 @@ function SettingsSheet({
                 ))}
               </SelectContent>
             </Select>
+
+            {/* İkindi Mezhebi - sadece SV dışı yöntemlerde göster */}
+            {settings.calculationMethod !== 'suleymaniye' && (
+              <div className="mt-3 space-y-1.5">
+                <Label className="text-xs">İkindi Vakti Mezhebi</Label>
+                <Select
+                  value={settings.asrMadhab}
+                  onValueChange={(val) => updateSettings({ asrMadhab: val as AsrMadhab })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="standard">Standart (Şâfiî/Mâlikî/Hanbelî)</SelectItem>
+                    <SelectItem value="hanafi">Hanefî (Asr-ı Sânî)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  Hanefî mezhebine göre ikindi vakti, gölgenin eşya uzunluğunun 2 katına ulaşmasıyla başlar. Standart mezheplerde ise 1 katına ulaşmasıyla başlar.
+                </p>
+              </div>
+            )}
           </SettingsSection>
 
           <Separator />
