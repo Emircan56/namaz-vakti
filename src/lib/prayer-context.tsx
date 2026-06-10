@@ -535,6 +535,9 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
   }, [getMethodConfig]);
 
   // ── Tarayıcı İçi Bildirim (sekme açıkken fallback) ──
+  // Push aboneliği aktifse sunucu zaten push bildirimi göndereceği için
+  // lokal bildirim göstermiyoruz — aksi takdirde çift bildirim oluşur.
+  // Push yoksa (VAPID key yok, tarayıcı desteklemiyor vb.) lokal bildirim fallback olarak çalışır.
   const notifiedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -549,6 +552,12 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!prayerTimes) return;
+
+    // Push aboneliği aktifse, sunucu zaten push bildirimi gönderecek
+    // Lokal bildirim sadece push yoksa (fallback) çalışsın
+    const hasPushSubscription = settings.pushEnabled && !!pushSubscriptionRef.current;
+    if (hasPushSubscription) return;
+
     const interval = setInterval(() => {
       const now = new Date();
       if (!('Notification' in window) || Notification.permission !== 'granted') return;
@@ -611,7 +620,7 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [prayerTimes, settings.alarms, settings.calculationMethod]);
+  }, [prayerTimes, settings.alarms, settings.calculationMethod, settings.pushEnabled]);
 
   const prayerOrder = getPrayerOrder(settings.calculationMethod);
 

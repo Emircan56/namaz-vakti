@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
 // Süleymaniye Vakfı Namaz Vakitleri - Service Worker
-// Push bildirimlerini alıp gösterir
+// Push bildirimlerini alıp gösterir, tarayıcı kapalıyken bile çalışır
 
 const NOTIFICATION_ICON = '/favicon.ico';
 
@@ -64,6 +64,29 @@ self.addEventListener('notificationclick', (event) => {
 // Bildirim kapatıldığında
 self.addEventListener('notificationclose', () => {
   // İstatistik veya takip için kullanılabilir
+});
+
+// Push aboneliği değiştiğinde (tarayıcı tarafından yenilendiğinde)
+// Backend'e güncel aboneliği gönder
+self.addEventListener('pushsubscriptionchange', (event) => {
+  const oldSubscription = event.oldSubscription;
+  const newSubscription = event.newSubscription;
+
+  if (!newSubscription) return;
+
+  event.waitUntil(
+    fetch('/api/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subscription: newSubscription.toJSON(),
+        resubscribe: true,
+        oldEndpoint: oldSubscription?.endpoint,
+      }),
+    }).catch((err) => {
+      console.error('Abonelik yenileme hatası:', err);
+    })
+  );
 });
 
 // Aktifleştirme — eski Service Worker'ı devre dışı bırak

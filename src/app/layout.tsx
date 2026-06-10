@@ -18,6 +18,7 @@ export const metadata: Metadata = {
   description: "Süleymaniye Vakfı Mîzan metodolojisine göre hesaplanan namaz vakitleri uygulaması. Fıkhî-astronomik hesaplama, Mizan kuralı, hatırlatıcı sistemi.",
   keywords: ["namaz vakitleri", "Süleymaniye Vakfı", "Mîzan", "İmsak", "hesaplama"],
   authors: [{ name: "Süleymaniye Vakfı Namaz Vakti" }],
+  manifest: "/manifest.json",
   icons: {
     icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕌</text></svg>",
   },

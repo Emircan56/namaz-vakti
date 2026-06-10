@@ -15,10 +15,17 @@ if (vapidPublicKey && vapidPrivateKey) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { subscription, settings } = body;
+    const { subscription, settings, resubscribe, oldEndpoint } = body;
 
     if (!subscription || !subscription.endpoint) {
       return NextResponse.json({ error: 'Geçersiz abonelik' }, { status: 400 });
+    }
+
+    // Abonelik yenileme: eski endpoint'i sil, yenisini kaydet
+    if (resubscribe && oldEndpoint && oldEndpoint !== subscription.endpoint) {
+      await db.pushSubscription.deleteMany({
+        where: { endpoint: oldEndpoint },
+      }).catch(() => {}); // Eski kayıt yoksa sessizce devam et
     }
 
     // Mevcut aboneliği kontrol et

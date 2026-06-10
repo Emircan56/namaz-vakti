@@ -60,11 +60,14 @@ export async function GET(request: NextRequest) {
 
           // Ana bildirim: vaktin tam zamanında (±60 saniye)
           if (diff <= 0 && diff > -60000) {
+            // Tag'e tarih ekle — aynı gün aynı bildirim tekrar gönderilmez,
+            // ertesi gün yeni bildirim gönderilir
+            const todayStr = now.toISOString().slice(0, 10);
             const payload = {
               title: `${p.label} Vakti`,
               body: `${p.label} vakti geldi: ${formatTime(prayerTime)}`,
               icon: '/favicon.ico',
-              tag: `prayer-${p.key}`,
+              tag: `prayer-${p.key}-${todayStr}`,
               prayerKey: p.key,
               url: '/',
             };
@@ -90,11 +93,12 @@ export async function GET(request: NextRequest) {
           if (alarm.preAlarm?.enabled && alarm.preAlarm.minutes > 0) {
             const preAlarmDiff = diff - alarm.preAlarm.minutes * 60 * 1000;
             if (preAlarmDiff <= 0 && preAlarmDiff > -60000) {
+              const todayStr = now.toISOString().slice(0, 10);
               const payload = {
                 title: `${p.label} Yaklaşıyor`,
                 body: `${p.label} vaktine ${alarm.preAlarm.minutes} dakika kaldı`,
                 icon: '/favicon.ico',
-                tag: `prealarm-${p.key}`,
+                tag: `prealarm-${p.key}-${todayStr}`,
                 prayerKey: p.key,
                 url: '/',
               };
