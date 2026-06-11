@@ -48,7 +48,12 @@
   --color-gold-foreground: var(--gold-foreground);
 }
 
-:root {
+/* ════════════════════════════════════════════════════════════
+   TEMA: İSLAM YEŞİLİ (Varsayılan) — hue 155
+   ════════════════════════════════════════════════════════════ */
+
+:root,
+.theme-islamic {
   --radius: 0.625rem;
   --background: oklch(0.97 0.005 155);
   --foreground: oklch(0.17 0.02 155);
@@ -88,7 +93,8 @@
   --gold-foreground: oklch(0.2 0.05 75);
 }
 
-.dark {
+.theme-islamic.dark,
+.dark .theme-islamic {
   --background: oklch(0.14 0.015 155);
   --foreground: oklch(0.93 0.01 155);
   --card: oklch(0.18 0.02 155);
@@ -127,13 +133,435 @@
   --gold-foreground: oklch(0.2 0.05 75);
 }
 
+/* ════════════════════════════════════════════════════════════
+   TEMA: SULTAN MAVİSİ — hue 250
+   ════════════════════════════════════════════════════════════ */
+
+.theme-sultan {
+  --radius: 0.625rem;
+  --background: oklch(0.97 0.005 250);
+  --foreground: oklch(0.17 0.02 250);
+  --card: oklch(0.995 0.002 250);
+  --card-foreground: oklch(0.17 0.02 250);
+  --popover: oklch(0.995 0.002 250);
+  --popover-foreground: oklch(0.17 0.02 250);
+  --primary: oklch(0.42 0.12 250);
+  --primary-foreground: oklch(0.98 0.005 250);
+  --secondary: oklch(0.94 0.015 250);
+  --secondary-foreground: oklch(0.25 0.03 250);
+  --muted: oklch(0.94 0.01 250);
+  --muted-foreground: oklch(0.5 0.02 250);
+  --accent: oklch(0.92 0.02 250);
+  --accent-foreground: oklch(0.25 0.03 250);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.88 0.012 250);
+  --input: oklch(0.88 0.012 250);
+  --ring: oklch(0.42 0.12 250);
+  --chart-1: oklch(0.42 0.12 250);
+  --chart-2: oklch(0.55 0.14 220);
+  --chart-3: oklch(0.6 0.1 280);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.97 0.005 250);
+  --sidebar-foreground: oklch(0.17 0.02 250);
+  --sidebar-primary: oklch(0.42 0.12 250);
+  --sidebar-primary-foreground: oklch(0.98 0.005 250);
+  --sidebar-accent: oklch(0.94 0.015 250);
+  --sidebar-accent-foreground: oklch(0.25 0.03 250);
+  --sidebar-border: oklch(0.88 0.012 250);
+  --sidebar-ring: oklch(0.42 0.12 250);
+  --islamic: oklch(0.38 0.14 250);
+  --islamic-foreground: oklch(0.98 0.005 250);
+  --islamic-light: oklch(0.91 0.035 250);
+  --gold: oklch(0.78 0.15 75);
+  --gold-foreground: oklch(0.2 0.05 75);
+}
+
+.theme-sultan.dark,
+.dark .theme-sultan {
+  --background: oklch(0.14 0.02 250);
+  --foreground: oklch(0.93 0.01 250);
+  --card: oklch(0.18 0.025 250);
+  --card-foreground: oklch(0.93 0.01 250);
+  --popover: oklch(0.18 0.025 250);
+  --popover-foreground: oklch(0.93 0.01 250);
+  --primary: oklch(0.55 0.15 250);
+  --primary-foreground: oklch(0.14 0.02 250);
+  --secondary: oklch(0.22 0.03 250);
+  --secondary-foreground: oklch(0.93 0.01 250);
+  --muted: oklch(0.22 0.025 250);
+  --muted-foreground: oklch(0.65 0.02 250);
+  --accent: oklch(0.24 0.035 250);
+  --accent-foreground: oklch(0.93 0.01 250);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(0.28 0.03 250);
+  --input: oklch(0.28 0.03 250);
+  --ring: oklch(0.55 0.15 250);
+  --chart-1: oklch(0.55 0.15 250);
+  --chart-2: oklch(0.696 0.17 220);
+  --chart-3: oklch(0.6 0.15 280);
+  --chart-4: oklch(0.769 0.188 70.08);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.16 0.022 250);
+  --sidebar-foreground: oklch(0.93 0.01 250);
+  --sidebar-primary: oklch(0.55 0.15 250);
+  --sidebar-primary-foreground: oklch(0.14 0.02 250);
+  --sidebar-accent: oklch(0.22 0.03 250);
+  --sidebar-accent-foreground: oklch(0.93 0.01 250);
+  --sidebar-border: oklch(0.28 0.03 250);
+  --sidebar-ring: oklch(0.55 0.15 250);
+  --islamic: oklch(0.5 0.17 250);
+  --islamic-foreground: oklch(0.14 0.02 250);
+  --islamic-light: oklch(0.24 0.035 250);
+  --gold: oklch(0.78 0.15 75);
+  --gold-foreground: oklch(0.2 0.05 75);
+}
+
+/* ════════════════════════════════════════════════════════════
+   TEMA: HÜNKÂR MORU — hue 290
+   ════════════════════════════════════════════════════════════ */
+
+.theme-hunkar {
+  --radius: 0.625rem;
+  --background: oklch(0.97 0.008 290);
+  --foreground: oklch(0.17 0.025 290);
+  --card: oklch(0.995 0.003 290);
+  --card-foreground: oklch(0.17 0.025 290);
+  --popover: oklch(0.995 0.003 290);
+  --popover-foreground: oklch(0.17 0.025 290);
+  --primary: oklch(0.42 0.14 290);
+  --primary-foreground: oklch(0.98 0.005 290);
+  --secondary: oklch(0.94 0.018 290);
+  --secondary-foreground: oklch(0.25 0.035 290);
+  --muted: oklch(0.94 0.012 290);
+  --muted-foreground: oklch(0.5 0.025 290);
+  --accent: oklch(0.92 0.022 290);
+  --accent-foreground: oklch(0.25 0.035 290);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.88 0.015 290);
+  --input: oklch(0.88 0.015 290);
+  --ring: oklch(0.42 0.14 290);
+  --chart-1: oklch(0.42 0.14 290);
+  --chart-2: oklch(0.55 0.12 320);
+  --chart-3: oklch(0.6 0.1 260);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.97 0.008 290);
+  --sidebar-foreground: oklch(0.17 0.025 290);
+  --sidebar-primary: oklch(0.42 0.14 290);
+  --sidebar-primary-foreground: oklch(0.98 0.005 290);
+  --sidebar-accent: oklch(0.94 0.018 290);
+  --sidebar-accent-foreground: oklch(0.25 0.035 290);
+  --sidebar-border: oklch(0.88 0.015 290);
+  --sidebar-ring: oklch(0.42 0.14 290);
+  --islamic: oklch(0.38 0.16 290);
+  --islamic-foreground: oklch(0.98 0.005 290);
+  --islamic-light: oklch(0.91 0.04 290);
+  --gold: oklch(0.78 0.15 75);
+  --gold-foreground: oklch(0.2 0.05 75);
+}
+
+.theme-hunkar.dark,
+.dark .theme-hunkar {
+  --background: oklch(0.14 0.025 290);
+  --foreground: oklch(0.93 0.012 290);
+  --card: oklch(0.18 0.03 290);
+  --card-foreground: oklch(0.93 0.012 290);
+  --popover: oklch(0.18 0.03 290);
+  --popover-foreground: oklch(0.93 0.012 290);
+  --primary: oklch(0.55 0.17 290);
+  --primary-foreground: oklch(0.14 0.025 290);
+  --secondary: oklch(0.22 0.035 290);
+  --secondary-foreground: oklch(0.93 0.012 290);
+  --muted: oklch(0.22 0.03 290);
+  --muted-foreground: oklch(0.65 0.025 290);
+  --accent: oklch(0.24 0.04 290);
+  --accent-foreground: oklch(0.93 0.012 290);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(0.28 0.035 290);
+  --input: oklch(0.28 0.035 290);
+  --ring: oklch(0.55 0.17 290);
+  --chart-1: oklch(0.55 0.17 290);
+  --chart-2: oklch(0.696 0.17 320);
+  --chart-3: oklch(0.6 0.15 260);
+  --chart-4: oklch(0.769 0.188 70.08);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.16 0.028 290);
+  --sidebar-foreground: oklch(0.93 0.012 290);
+  --sidebar-primary: oklch(0.55 0.17 290);
+  --sidebar-primary-foreground: oklch(0.14 0.025 290);
+  --sidebar-accent: oklch(0.22 0.035 290);
+  --sidebar-accent-foreground: oklch(0.93 0.012 290);
+  --sidebar-border: oklch(0.28 0.035 290);
+  --sidebar-ring: oklch(0.55 0.17 290);
+  --islamic: oklch(0.5 0.19 290);
+  --islamic-foreground: oklch(0.14 0.025 290);
+  --islamic-light: oklch(0.24 0.04 290);
+  --gold: oklch(0.78 0.15 75);
+  --gold-foreground: oklch(0.2 0.05 75);
+}
+
+/* ════════════════════════════════════════════════════════════
+   TEMA: OSMANLI BORDOSU — hue 15
+   ════════════════════════════════════════════════════════════ */
+
+.theme-osmanli {
+  --radius: 0.625rem;
+  --background: oklch(0.97 0.005 15);
+  --foreground: oklch(0.17 0.025 15);
+  --card: oklch(0.995 0.002 15);
+  --card-foreground: oklch(0.17 0.025 15);
+  --popover: oklch(0.995 0.002 15);
+  --popover-foreground: oklch(0.17 0.025 15);
+  --primary: oklch(0.4 0.14 15);
+  --primary-foreground: oklch(0.98 0.005 15);
+  --secondary: oklch(0.94 0.012 15);
+  --secondary-foreground: oklch(0.25 0.035 15);
+  --muted: oklch(0.94 0.01 15);
+  --muted-foreground: oklch(0.5 0.02 15);
+  --accent: oklch(0.92 0.018 15);
+  --accent-foreground: oklch(0.25 0.035 15);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.88 0.012 15);
+  --input: oklch(0.88 0.012 15);
+  --ring: oklch(0.4 0.14 15);
+  --chart-1: oklch(0.4 0.14 15);
+  --chart-2: oklch(0.55 0.1 30);
+  --chart-3: oklch(0.6 0.08 350);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.97 0.005 15);
+  --sidebar-foreground: oklch(0.17 0.025 15);
+  --sidebar-primary: oklch(0.4 0.14 15);
+  --sidebar-primary-foreground: oklch(0.98 0.005 15);
+  --sidebar-accent: oklch(0.94 0.012 15);
+  --sidebar-accent-foreground: oklch(0.25 0.035 15);
+  --sidebar-border: oklch(0.88 0.012 15);
+  --sidebar-ring: oklch(0.4 0.14 15);
+  --islamic: oklch(0.35 0.15 15);
+  --islamic-foreground: oklch(0.98 0.005 15);
+  --islamic-light: oklch(0.91 0.035 15);
+  --gold: oklch(0.78 0.15 75);
+  --gold-foreground: oklch(0.2 0.05 75);
+}
+
+.theme-osmanli.dark,
+.dark .theme-osmanli {
+  --background: oklch(0.14 0.02 15);
+  --foreground: oklch(0.93 0.01 15);
+  --card: oklch(0.18 0.025 15);
+  --card-foreground: oklch(0.93 0.01 15);
+  --popover: oklch(0.18 0.025 15);
+  --popover-foreground: oklch(0.93 0.01 15);
+  --primary: oklch(0.5 0.17 15);
+  --primary-foreground: oklch(0.14 0.02 15);
+  --secondary: oklch(0.22 0.03 15);
+  --secondary-foreground: oklch(0.93 0.01 15);
+  --muted: oklch(0.22 0.025 15);
+  --muted-foreground: oklch(0.65 0.02 15);
+  --accent: oklch(0.24 0.035 15);
+  --accent-foreground: oklch(0.93 0.01 15);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(0.28 0.03 15);
+  --input: oklch(0.28 0.03 15);
+  --ring: oklch(0.5 0.17 15);
+  --chart-1: oklch(0.5 0.17 15);
+  --chart-2: oklch(0.696 0.17 30);
+  --chart-3: oklch(0.6 0.15 350);
+  --chart-4: oklch(0.769 0.188 70.08);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.16 0.022 15);
+  --sidebar-foreground: oklch(0.93 0.01 15);
+  --sidebar-primary: oklch(0.5 0.17 15);
+  --sidebar-primary-foreground: oklch(0.14 0.02 15);
+  --sidebar-accent: oklch(0.22 0.03 15);
+  --sidebar-accent-foreground: oklch(0.93 0.01 15);
+  --sidebar-border: oklch(0.28 0.03 15);
+  --sidebar-ring: oklch(0.5 0.17 15);
+  --islamic: oklch(0.45 0.19 15);
+  --islamic-foreground: oklch(0.14 0.02 15);
+  --islamic-light: oklch(0.24 0.035 15);
+  --gold: oklch(0.78 0.15 75);
+  --gold-foreground: oklch(0.2 0.05 75);
+}
+
+/* ════════════════════════════════════════════════════════════
+   TEMA: ÇINAR TURKUAZ — hue 180
+   ════════════════════════════════════════════════════════════ */
+
+.theme-cinar {
+  --radius: 0.625rem;
+  --background: oklch(0.97 0.005 180);
+  --foreground: oklch(0.17 0.02 180);
+  --card: oklch(0.995 0.002 180);
+  --card-foreground: oklch(0.17 0.02 180);
+  --popover: oklch(0.995 0.002 180);
+  --popover-foreground: oklch(0.17 0.02 180);
+  --primary: oklch(0.42 0.1 180);
+  --primary-foreground: oklch(0.98 0.005 180);
+  --secondary: oklch(0.94 0.012 180);
+  --secondary-foreground: oklch(0.25 0.03 180);
+  --muted: oklch(0.94 0.01 180);
+  --muted-foreground: oklch(0.5 0.02 180);
+  --accent: oklch(0.92 0.018 180);
+  --accent-foreground: oklch(0.25 0.03 180);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.88 0.012 180);
+  --input: oklch(0.88 0.012 180);
+  --ring: oklch(0.42 0.1 180);
+  --chart-1: oklch(0.42 0.1 180);
+  --chart-2: oklch(0.55 0.12 200);
+  --chart-3: oklch(0.6 0.08 160);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.97 0.005 180);
+  --sidebar-foreground: oklch(0.17 0.02 180);
+  --sidebar-primary: oklch(0.42 0.1 180);
+  --sidebar-primary-foreground: oklch(0.98 0.005 180);
+  --sidebar-accent: oklch(0.94 0.012 180);
+  --sidebar-accent-foreground: oklch(0.25 0.03 180);
+  --sidebar-border: oklch(0.88 0.012 180);
+  --sidebar-ring: oklch(0.42 0.1 180);
+  --islamic: oklch(0.38 0.12 180);
+  --islamic-foreground: oklch(0.98 0.005 180);
+  --islamic-light: oklch(0.91 0.035 180);
+  --gold: oklch(0.78 0.15 75);
+  --gold-foreground: oklch(0.2 0.05 75);
+}
+
+.theme-cinar.dark,
+.dark .theme-cinar {
+  --background: oklch(0.14 0.02 180);
+  --foreground: oklch(0.93 0.01 180);
+  --card: oklch(0.18 0.025 180);
+  --card-foreground: oklch(0.93 0.01 180);
+  --popover: oklch(0.18 0.025 180);
+  --popover-foreground: oklch(0.93 0.01 180);
+  --primary: oklch(0.52 0.14 180);
+  --primary-foreground: oklch(0.14 0.02 180);
+  --secondary: oklch(0.22 0.03 180);
+  --secondary-foreground: oklch(0.93 0.01 180);
+  --muted: oklch(0.22 0.025 180);
+  --muted-foreground: oklch(0.65 0.02 180);
+  --accent: oklch(0.24 0.035 180);
+  --accent-foreground: oklch(0.93 0.01 180);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(0.28 0.03 180);
+  --input: oklch(0.28 0.03 180);
+  --ring: oklch(0.52 0.14 180);
+  --chart-1: oklch(0.52 0.14 180);
+  --chart-2: oklch(0.696 0.17 200);
+  --chart-3: oklch(0.6 0.15 160);
+  --chart-4: oklch(0.769 0.188 70.08);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.16 0.022 180);
+  --sidebar-foreground: oklch(0.93 0.01 180);
+  --sidebar-primary: oklch(0.52 0.14 180);
+  --sidebar-primary-foreground: oklch(0.14 0.02 180);
+  --sidebar-accent: oklch(0.22 0.03 180);
+  --sidebar-accent-foreground: oklch(0.93 0.01 180);
+  --sidebar-border: oklch(0.28 0.03 180);
+  --sidebar-ring: oklch(0.52 0.14 180);
+  --islamic: oklch(0.48 0.16 180);
+  --islamic-foreground: oklch(0.14 0.02 180);
+  --islamic-light: oklch(0.24 0.035 180);
+  --gold: oklch(0.78 0.15 75);
+  --gold-foreground: oklch(0.2 0.05 75);
+}
+
+/* ════════════════════════════════════════════════════════════
+   TEMA: KEHRİBAR — hue 55
+   ════════════════════════════════════════════════════════════ */
+
+.theme-kehribar {
+  --radius: 0.625rem;
+  --background: oklch(0.97 0.008 55);
+  --foreground: oklch(0.17 0.03 55);
+  --card: oklch(0.995 0.003 55);
+  --card-foreground: oklch(0.17 0.03 55);
+  --popover: oklch(0.995 0.003 55);
+  --popover-foreground: oklch(0.17 0.03 55);
+  --primary: oklch(0.5 0.14 55);
+  --primary-foreground: oklch(0.98 0.005 55);
+  --secondary: oklch(0.94 0.018 55);
+  --secondary-foreground: oklch(0.25 0.04 55);
+  --muted: oklch(0.94 0.012 55);
+  --muted-foreground: oklch(0.5 0.025 55);
+  --accent: oklch(0.92 0.022 55);
+  --accent-foreground: oklch(0.25 0.04 55);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.88 0.015 55);
+  --input: oklch(0.88 0.015 55);
+  --ring: oklch(0.5 0.14 55);
+  --chart-1: oklch(0.5 0.14 55);
+  --chart-2: oklch(0.55 0.12 35);
+  --chart-3: oklch(0.6 0.1 75);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.97 0.008 55);
+  --sidebar-foreground: oklch(0.17 0.03 55);
+  --sidebar-primary: oklch(0.5 0.14 55);
+  --sidebar-primary-foreground: oklch(0.98 0.005 55);
+  --sidebar-accent: oklch(0.94 0.018 55);
+  --sidebar-accent-foreground: oklch(0.25 0.04 55);
+  --sidebar-border: oklch(0.88 0.015 55);
+  --sidebar-ring: oklch(0.5 0.14 55);
+  --islamic: oklch(0.5 0.16 55);
+  --islamic-foreground: oklch(0.98 0.005 55);
+  --islamic-light: oklch(0.92 0.04 55);
+  --gold: oklch(0.72 0.17 55);
+  --gold-foreground: oklch(0.2 0.05 55);
+}
+
+.theme-kehribar.dark,
+.dark .theme-kehribar {
+  --background: oklch(0.14 0.025 55);
+  --foreground: oklch(0.93 0.012 55);
+  --card: oklch(0.18 0.03 55);
+  --card-foreground: oklch(0.93 0.012 55);
+  --popover: oklch(0.18 0.03 55);
+  --popover-foreground: oklch(0.93 0.012 55);
+  --primary: oklch(0.6 0.17 55);
+  --primary-foreground: oklch(0.14 0.025 55);
+  --secondary: oklch(0.22 0.035 55);
+  --secondary-foreground: oklch(0.93 0.012 55);
+  --muted: oklch(0.22 0.03 55);
+  --muted-foreground: oklch(0.65 0.025 55);
+  --accent: oklch(0.24 0.04 55);
+  --accent-foreground: oklch(0.93 0.012 55);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(0.28 0.035 55);
+  --input: oklch(0.28 0.035 55);
+  --ring: oklch(0.6 0.17 55);
+  --chart-1: oklch(0.6 0.17 55);
+  --chart-2: oklch(0.696 0.17 35);
+  --chart-3: oklch(0.6 0.15 75);
+  --chart-4: oklch(0.769 0.188 70.08);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.16 0.028 55);
+  --sidebar-foreground: oklch(0.93 0.012 55);
+  --sidebar-primary: oklch(0.6 0.17 55);
+  --sidebar-primary-foreground: oklch(0.14 0.025 55);
+  --sidebar-accent: oklch(0.22 0.035 55);
+  --sidebar-accent-foreground: oklch(0.93 0.012 55);
+  --sidebar-border: oklch(0.28 0.035 55);
+  --sidebar-ring: oklch(0.6 0.17 55);
+  --islamic: oklch(0.58 0.19 55);
+  --islamic-foreground: oklch(0.14 0.025 55);
+  --islamic-light: oklch(0.24 0.04 55);
+  --gold: oklch(0.72 0.17 55);
+  --gold-foreground: oklch(0.2 0.05 55);
+}
+
+/* ════════════════════════════════════════════════════════════
+   Karanlık mod — .dark sınıfı tüm temaları etkiler
+   ════════════════════════════════════════════════════════════ */
+
+/* (Her tema kendi .dark varyantını yukarıda tanımlıyor) */
+
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+  * { @apply border-border outline-ring/50; }
+  body { @apply bg-background text-foreground; }
 }
 
 /* Islamic geometric pattern background */
@@ -194,4 +622,32 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: oklch(0.42 0.1 155 / 0.5);
+}
+
+/* ════════════════════════════════════════════════════════════
+   Tema geçiş animasyonu
+   ════════════════════════════════════════════════════════════ */
+
+html {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+html *,
+html *::before,
+html *::after {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Tema seçici kart stilleri */
+.theme-swatch {
+  transition: all 0.2s ease;
+}
+
+.theme-swatch:hover {
+  transform: scale(1.05);
+}
+
+.theme-swatch.active {
+  ring: 2px;
+  ring-offset: 2px;
 }

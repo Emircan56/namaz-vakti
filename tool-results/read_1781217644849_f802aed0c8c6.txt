@@ -1,0 +1,976 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+     4→     4→import {
+     5→     5→  PrayerAppProvider,
+     6→     6→  usePrayerApp,
+     7→     7→  type LocationSource,
+     8→     8→  type AsrMadhab,
+     9→     9→} from '@/lib/prayer-context';
+    10→    10→import {
+    11→    11→  METHOD_CONFIGS,
+    12→    12→  type CalculationMethod,
+    13→    13→  formatTime,
+    14→    14→  type PrayerTimes,
+    15→    15→  type PrayerInfo,
+    16→    16→} from '@/lib/prayer-calculator';
+    17→    17→import { Card, CardContent } from '@/components/ui/card';
+    18→    18→import { Button } from '@/components/ui/button';
+    19→    19→import { Switch } from '@/components/ui/switch';
+    20→    20→import { Badge } from '@/components/ui/badge';
+    21→    21→import { Separator } from '@/components/ui/separator';
+    22→    22→import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from '@/components/ui/sheet';
+    23→    23→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    24→    24→import { Label } from '@/components/ui/label';
+    25→    25→import { Input } from '@/components/ui/input';
+    26→    26→import {
+    27→    27→  Settings,
+    28→    28→  MapPin,
+    29→    29→  Moon,
+    30→    30→  Sun,
+    31→    31→  Bell,
+    32→    32→  BellOff,
+    33→    33→  Info,
+    34→    34→  RefreshCw,
+    35→    35→  AlertTriangle,
+    36→    36→  X,
+    37→    37→  Navigation,
+    38→    38→  Wifi,
+    39→    39→  BellRing,
+    40→    40→  BellDot,
+    41→    41→} from 'lucide-react';
+    42→    42→
+    43→    43→// ────────────────────────────────────────────────────────────
+    44→    44→// Ana Uygulama Bileşeni
+    45→    45→// ────────────────────────────────────────────────────────────
+    46→    46→
+    47→    47→export default function Home() {
+    48→    48→  return (
+    49→    49→    <PrayerAppProvider>
+    50→    50→      <PrayerApp />
+    51→    51→    </PrayerAppProvider>
+    52→    52→  );
+    53→    53→}
+    54→    54→
+    55→    55→function PrayerApp() {
+    56→    56→  const {
+    57→    57→    prayerTimes,
+    58→    58→    settings,
+    59→    59→    currentLocation,
+    60→    60→    hijriDate,
+    61→    61→    activePrayer,
+    62→    62→    nextPrayer,
+    63→    63→    countdown,
+    64→    64→    isLoading,
+    65→    65→    error,
+    66→    66→    isHighLatitude,
+    67→    67→    mizanApplied,
+    68→    68→    locationSource,
+    69→    69→    prayerOrder,
+    70→    70→    updateSettings,
+    71→    71→    refreshLocation,
+    72→    72→    pushSupported,
+    73→    73→    pushPermission,
+    74→    74→    enablePushNotifications,
+    75→    75→    disablePushNotifications,
+    76→    76→  } = usePrayerApp();
+    77→    77→
+    78→    78→  const [isDark, setIsDark] = useState(() => {
+    79→    79→    if (typeof window === 'undefined') return false;
+    80→    80→    const saved = localStorage.getItem('theme');
+    81→    81→    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    82→    82→    return saved === 'dark' || (!saved && prefersDark);
+    83→    83→  });
+    84→    84→  const [currentTime, setCurrentTime] = useState(new Date());
+    85→    85→  const [locationBannerDismissed, setLocationBannerDismissed] = useState(false);
+    86→    86→
+    87→    87→  // Dark mode sync with DOM
+    88→    88→  useEffect(() => {
+    89→    89→    document.documentElement.classList.toggle('dark', isDark);
+    90→    90→  }, [isDark]);
+    91→    91→
+    92→    92→  const toggleDark = useCallback(() => {
+    93→    93→    setIsDark((prev: boolean) => {
+    94→    94→      const next = !prev;
+    95→    95→      localStorage.setItem('theme', next ? 'dark' : 'light');
+    96→    96→      return next;
+    97→    97→    });
+    98→    98→  }, []);
+    99→    99→
+   100→   100→  // Saat güncelleme
+   101→   101→  useEffect(() => {
+   102→   102→    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
+   103→   103→    return () => clearInterval(interval);
+   104→   104→  }, []);
+   105→   105→
+   106→   106→  // Bildirim izni iste
+   107→   107→  const requestNotificationPermission = useCallback(async () => {
+   108→   108→    if ('Notification' in window && Notification.permission === 'default') {
+   109→   109→      await Notification.requestPermission();
+   110→   110→    }
+   111→   111→  }, []);
+   112→   112→
+   113→   113→  useEffect(() => {
+   114→   114→    requestNotificationPermission();
+   115→   115→  }, []);
+   116→   116→
+   117→   117→  if (isLoading) {
+   118→   118→    return <LoadingScreen />;
+   119→   119→  }
+   120→   120→
+   121→   121→  return (
+   122→   122→    <div className="min-h-screen flex flex-col islamic-pattern">
+   123→   123→      {/* Üst Bilgi Çubuğu */}
+   124→   124→      <Header
+   125→   125→        location={currentLocation}
+   126→   126→        hijriDate={hijriDate}
+   127→   127→        currentTime={currentTime}
+   128→   128→        isDark={isDark}
+   129→   129→        onToggleDark={toggleDark}
+   130→   130→        onRefresh={() => refreshLocation(true)}
+   131→   131→        error={error}
+   132→   132→      />
+   133→   133→
+   134→   134→      {/* Konum Bildirimi */}
+   135→   135→      {locationSource !== 'browser' && locationSource !== 'manual' && !locationBannerDismissed && (
+   136→   136→        <LocationBanner source={locationSource} onDismiss={() => setLocationBannerDismissed(true)} onRetry={() => refreshLocation(true)} />
+   137→   137→      )}
+   138→   138→
+   139→   139→      {/* Ana İçerik */}
+   140→   140→      <main className="flex-1 flex flex-col items-center px-4 py-4 gap-4 max-w-lg mx-auto w-full">
+   141→   141→        {/* Geri Sayım Kartı */}
+   142→   142→        <CountdownCard
+   143→   143→          activePrayer={activePrayer}
+   144→   144→          nextPrayer={nextPrayer}
+   145→   145→          countdown={countdown}
+   146→   146→          prayerTimes={prayerTimes}
+   147→   147→          isHighLatitude={isHighLatitude}
+   148→   148→          mizanApplied={mizanApplied}
+   149→   149→        />
+   150→   150→
+   151→   151→        {/* Vakitler Listesi */}
+   152→   152→        <PrayerTimesList
+   153→   153→          prayerTimes={prayerTimes}
+   154→   154→          activePrayer={activePrayer}
+   155→   155→          nextPrayer={nextPrayer}
+   156→   156→          settings={settings}
+   157→   157→          updateSettings={updateSettings}
+   158→   158→          prayerOrder={prayerOrder}
+   159→   159→          pushSupported={pushSupported}
+   160→   160→          pushPermission={pushPermission}
+   161→   161→          enablePushNotifications={enablePushNotifications}
+   162→   162→          disablePushNotifications={disablePushNotifications}
+   163→   163→        />
+   164→   164→      </main>
+   165→   165→
+   166→   166→      {/* Alt Bilgi */}
+   167→   167→      <Footer method={settings.calculationMethod} />
+   168→   168→    </div>
+   169→   169→  );
+   170→   170→}
+   171→   171→
+   172→   172→// ────────────────────────────────────────────────────────────
+   173→   173→// Yüklenme Ekranı
+   174→   174→// ────────────────────────────────────────────────────────────
+   175→   175→
+   176→   176→function LoadingScreen() {
+   177→   177→  return (
+   178→   178→    <div className="min-h-screen flex flex-col items-center justify-center gap-4 islamic-pattern">
+   179→   179→      <div className="relative">
+   180→   180→        <div className="text-7xl mb-2 animate-pulse">🕌</div>
+   181→   181→        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-16 h-1 bg-islamic/30 rounded-full" />
+   182→   182→      </div>
+   183→   183→      <div className="text-xl font-semibold text-islamic mt-2">Namaz Vakitleri</div>
+   184→   184→      <div className="text-sm text-muted-foreground">Konum tespit ediliyor...</div>
+   185→   185→      <div className="flex gap-1.5 mt-4">
+   186→   186→        {[0, 1, 2].map(i => (
+   187→   187→          <div
+   188→   188→            key={i}
+   189→   189→            className="w-2 h-2 rounded-full bg-islamic animate-bounce"
+   190→   190→            style={{ animationDelay: `${i * 150}ms` }}
+   191→   191→          />
+   192→   192→        ))}
+   193→   193→      </div>
+   194→   194→    </div>
+   195→   195→  );
+   196→   196→}
+   197→   197→
+   198→   198→// ────────────────────────────────────────────────────────────
+   199→   199→// Üst Bilgi Çubuğu
+   200→   200→// ────────────────────────────────────────────────────────────
+   201→   201→
+   202→   202→function Header({
+   203→   203→  location,
+   204→   204→  hijriDate,
+   205→   205→  currentTime,
+   206→   206→  isDark,
+   207→   207→  onToggleDark,
+   208→   208→  onRefresh,
+   209→   209→  error,
+   210→   210→}: {
+   211→   211→  location: { city: string; country: string; timezoneName: string };
+   212→   212→  hijriDate: { day: number; month: number; year: number; monthName: string } | null;
+   213→   213→  currentTime: Date;
+   214→   214→  isDark: boolean;
+   215→   215→  onToggleDark: () => void;
+   216→   216→  onRefresh: () => void;
+   217→   217→  error: string | null;
+   218→   218→}) {
+   219→   219→  return (
+   220→   220→    <header className="w-full bg-islamic text-islamic-foreground shadow-lg relative overflow-hidden">
+   221→   221→      {/* Dekoratif geometrik desen */}
+   222→   222→      <div className="absolute inset-0 opacity-5">
+   223→   223→        <div className="absolute top-0 right-0 w-32 h-32 border-l-2 border-b-2 border-current rotate-45 translate-x-16 -translate-y-8" />
+   224→   224→        <div className="absolute bottom-0 left-0 w-24 h-24 border-r-2 border-t-2 border-current rotate-45 -translate-x-6 translate-y-6" />
+   225→   225→      </div>
+   226→   226→
+   227→   227→      <div className="relative max-w-lg mx-auto px-4 py-3">
+   228→   228→        {/* Konum ve Butonlar */}
+   229→   229→        <div className="flex items-center justify-between">
+   230→   230→          <div className="flex items-center gap-2">
+   231→   231→            <MapPin className="w-4 h-4 shrink-0" />
+   232→   232→            <span className="text-sm font-medium truncate">
+   233→   233→              {location.city}{location.country ? `, ${location.country}` : ''}
+   234→   234→            </span>
+   235→   235→          </div>
+   236→   236→          <div className="flex items-center gap-1">
+   237→   237→            <Button
+   238→   238→              variant="ghost"
+   239→   239→              size="icon"
+   240→   240→              className="h-8 w-8 text-islamic-foreground/80 hover:text-islamic-foreground hover:bg-islamic-light/20"
+   241→   241→              onClick={onRefresh}
+   242→   242→              aria-label="Konumu yenile"
+   243→   243→            >
+   244→   244→              <RefreshCw className="w-4 h-4" />
+   245→   245→            </Button>
+   246→   246→            <Button
+   247→   247→              variant="ghost"
+   248→   248→              size="icon"
+   249→   249→              className="h-8 w-8 text-islamic-foreground/80 hover:text-islamic-foreground hover:bg-islamic-light/20"
+   250→   250→              onClick={onToggleDark}
+   251→   251→              aria-label={isDark ? 'Aydınlık mod' : 'Karanlık mod'}
+   252→   252→            >
+   253→   253→              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+   254→   254→            </Button>
+   255→   255→          </div>
+   256→   256→        </div>
+   257→   257→
+   258→   258→        {/* Tarihler */}
+   259→   259→        <div className="flex items-center justify-between mt-1.5">
+   260→   260→          <span className="text-xs opacity-80">
+   261→   261→            {currentTime.toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+   262→   262→          </span>
+   263→   263→          {hijriDate && (
+   264→   264→            <span className="text-xs opacity-80 font-medium">
+   265→   265→              {hijriDate.day} {hijriDate.monthName} {hijriDate.year}
+   266→   266→            </span>
+   267→   267→          )}
+   268→   268→        </div>
+   269→   269→
+   270→   270→        {/* Saat */}
+   271→   271→        <div className="text-center mt-2">
+   272→   272→          <span className="text-2xl font-mono tracking-[0.2em] font-light">
+   273→   273→            {currentTime.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+   274→   274→          </span>
+   275→   275→        </div>
+   276→   276→
+   277→   277→        {/* Hata mesajı kaldırıldı — sessiz fallback */}
+   278→   278→      </div>
+   279→   279→    </header>
+   280→   280→  );
+   281→   281→}
+   282→   282→
+   283→   283→// ────────────────────────────────────────────────────────────
+   284→   284→// Dairesel İlerleme Göstergesi
+   285→   285→// ────────────────────────────────────────────────────────────
+   286→   286→
+   287→   287→function CircularProgress({
+   288→   288→  value,
+   289→   289→  size = 120,
+   290→   290→  strokeWidth = 4,
+   291→   291→  children,
+   292→   292→}: {
+   293→   293→  value: number; // 0-1
+   294→   294→  size?: number;
+   295→   295→  strokeWidth?: number;
+   296→   296→  children?: React.ReactNode;
+   297→   297→}) {
+   298→   298→  const radius = (size - strokeWidth) / 2;
+   299→   299→  const circumference = 2 * Math.PI * radius;
+   300→   300→  const offset = circumference - value * circumference;
+   301→   301→
+   302→   302→  return (
+   303→   303→    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+   304→   304→      <svg width={size} height={size} className="-rotate-90">
+   305→   305→        {/* Arka plan halkası */}
+   306→   306→        <circle
+   307→   307→          cx={size / 2}
+   308→   308→          cy={size / 2}
+   309→   309→          r={radius}
+   310→   310→          fill="none"
+   311→   311→          stroke="currentColor"
+   312→   312→          strokeWidth={strokeWidth}
+   313→   313→          className="text-islamic/10"
+   314→   314→        />
+   315→   315→        {/* İlerleme halkası */}
+   316→   316→        <circle
+   317→   317→          cx={size / 2}
+   318→   318→          cy={size / 2}
+   319→   319→          r={radius}
+   320→   320→          fill="none"
+   321→   321→          stroke="currentColor"
+   322→   322→          strokeWidth={strokeWidth}
+   323→   323→          strokeDasharray={circumference}
+   324→   324→          strokeDashoffset={offset}
+   325→   325→          strokeLinecap="round"
+   326→   326→          className="text-islamic transition-all duration-1000 ease-linear"
+   327→   327→        />
+   328→   328→      </svg>
+   329→   329→      <div className="absolute inset-0 flex items-center justify-center">
+   330→   330→        {children}
+   331→   331→      </div>
+   332→   332→    </div>
+   333→   333→  );
+   334→   334→}
+   335→   335→
+   336→   336→// ────────────────────────────────────────────────────────────
+   337→   337→// Geri Sayım Kartı
+   338→   338→// ────────────────────────────────────────────────────────────
+   339→   339→
+   340→   340→function CountdownCard({
+   341→   341→  activePrayer,
+   342→   342→  nextPrayer,
+   343→   343→  countdown,
+   344→   344→  prayerTimes,
+   345→   345→  isHighLatitude,
+   346→   346→  mizanApplied,
+   347→   347→}: {
+   348→   348→  activePrayer: PrayerInfo | null;
+   349→   349→  nextPrayer: PrayerInfo | null;
+   350→   350→  countdown: string;
+   351→   351→  prayerTimes: PrayerTimes | null;
+   352→   352→  isHighLatitude: boolean;
+   353→   353→  mizanApplied: boolean;
+   354→   354→}) {
+   355→   355→  // İlerleme hesaplama (aktif vaktin ne kadarı geçti)
+   356→   356→  const progress = useMemo(() => {
+   357→   357→    if (!prayerTimes || !activePrayer || !nextPrayer) return 0;
+   358→   358→    const activeTime = prayerTimes[activePrayer.key];
+   359→   359→    const nextTime = prayerTimes[nextPrayer.key];
+   360→   360→    const now = new Date();
+   361→   361→    const total = nextTime.getTime() - activeTime.getTime();
+   362→   362→    const elapsed = now.getTime() - activeTime.getTime();
+   363→   363→    if (total <= 0) return 0;
+   364→   364→    return Math.max(0, Math.min(1, elapsed / total));
+   365→   365→  }, [prayerTimes, activePrayer, nextPrayer]);
+   366→   366→
+   367→   367→  return (
+   368→   368→    <Card className="w-full border-islamic/20 shadow-lg overflow-hidden">
+   369→   369→      <div className="bg-gradient-to-br from-islamic/5 via-transparent to-gold/5">
+   370→   370→        <CardContent className="p-5">
+   371→   371→          <div className="flex items-center gap-5">
+   372→   372→            {/* Dairesel İlerleme */}
+   373→   373→            <div className="shrink-0">
+   374→   374→              <CircularProgress value={progress} size={110} strokeWidth={3}>
+   375→   375→                <div className="text-center">
+   376→   376→                  <div className="text-2xl font-mono font-bold text-islamic countdown-pulse tracking-wider">
+   377→   377→                    {countdown.slice(0, 5)}
+   378→   378→                  </div>
+   379→   379→                  <div className="text-[10px] text-muted-foreground mt-0.5">kaldı</div>
+   380→   380→                </div>
+   381→   381→              </CircularProgress>
+   382→   382→            </div>
+   383→   383→
+   384→   384→            {/* Vakit Bilgisi */}
+   385→   385→            <div className="flex-1 min-w-0">
+   386→   386→              {activePrayer && (
+   387→   387→                <div className="mb-2">
+   388→   388→                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">
+   389→   389→                    İçinde bulunulan vakit
+   390→   390→                  </div>
+   391→   391→                  <div className="text-lg font-bold text-islamic truncate">
+   392→   392→                    {activePrayer.icon} {activePrayer.label}
+   393→   393→                  </div>
+   394→   394→                </div>
+   395→   395→              )}
+   396→   396→
+   397→   397→              {nextPrayer && prayerTimes && (
+   398→   398→                <div>
+   399→   399→                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">
+   400→   400→                    Sıradaki vakit
+   401→   401→                  </div>
+   402→   402→                  <div className="text-base font-semibold text-foreground">
+   403→   403→                    {nextPrayer.icon} {nextPrayer.label}
+   404→   404→                    <span className="text-sm font-normal text-muted-foreground ml-2">
+   405→   405→                      {formatTime(prayerTimes[nextPrayer.key])}
+   406→   406→                    </span>
+   407→   407→                  </div>
+   408→   408→                </div>
+   409→   409→              )}
+   410→   410→
+   411→   411→              {/* Mizan / Yüksek Enlem Uyarısı */}
+   412→   412→              {(isHighLatitude || mizanApplied) && (
+   413→   413→                <Badge variant="outline" className="border-gold text-gold-foreground bg-gold/10 text-[10px] mt-2 px-1.5 py-0">
+   414→   414→                  <Info className="w-2.5 h-2.5 mr-0.5" />
+   415→   415→                  Mîzan kuralı
+   416→   416→                </Badge>
+   417→   417→              )}
+   418→   418→            </div>
+   419→   419→          </div>
+   420→   420→        </CardContent>
+   421→   421→      </div>
+   422→   422→    </Card>
+   423→   423→  );
+   424→   424→}
+   425→   425→
+   426→   426→// ────────────────────────────────────────────────────────────
+   427→   427→// Vakitler Listesi
+   428→   428→// ────────────────────────────────────────────────────────────
+   429→   429→
+   430→   430→function PrayerTimesList({
+   431→   431→  prayerTimes,
+   432→   432→  activePrayer,
+   433→   433→  nextPrayer,
+   434→   434→  settings,
+   435→   435→  updateSettings,
+   436→   436→  prayerOrder,
+   437→   437→  pushSupported,
+   438→   438→  pushPermission,
+   439→   439→  enablePushNotifications,
+   440→   440→  disablePushNotifications,
+   441→   441→}: {
+   442→   442→  prayerTimes: PrayerTimes | null;
+   443→   443→  activePrayer: PrayerInfo | null;
+   444→   444→  nextPrayer: PrayerInfo | null;
+   445→   445→  settings: any;
+   446→   446→  updateSettings: (partial: any) => void;
+   447→   447→  prayerOrder: PrayerInfo[];
+   448→   448→  pushSupported: boolean;
+   449→   449→  pushPermission: NotificationPermission | 'default';
+   450→   450→  enablePushNotifications: () => Promise<boolean>;
+   451→   451→  disablePushNotifications: () => Promise<void>;
+   452→   452→}) {
+   453→   453→  if (!prayerTimes) return null;
+   454→   454→
+   455→   455→  const now = new Date();
+   456→   456→
+   457→   457→  return (
+   458→   458→    <Card className="w-full shadow-md overflow-hidden">
+   459→   459→      {/* Başlık */}
+   460→   460→      <div className="px-4 py-2.5 bg-islamic/5 border-b border-islamic/10">
+   461→   461→        <h2 className="text-xs font-semibold text-islamic uppercase tracking-widest">
+   462→   462→          Günün Vakitleri
+   463→   463→        </h2>
+   464→   464→      </div>
+   465→   465→
+   466→   466→      {/* Vakit Satırları */}
+   467→   467→      <div>
+   468→   468→        {prayerOrder.map((prayer, index) => {
+   469→   469→          const time = prayerTimes[prayer.key];
+   470→   470→          const isActive = activePrayer?.key === prayer.key;
+   471→   471→          const isNext = nextPrayer?.key === prayer.key;
+   472→   472→          const isPast = time < now && !isActive;
+   473→   473→
+   474→   474→          return (
+   475→   475→            <div
+   476→   476→              key={prayer.key}
+   477→   477→              className={`
+   478→   478→                vakit-row relative px-4 py-2.5 flex items-center justify-between
+   479→   479→                ${isActive ? 'bg-islamic/8' : ''}
+   480→   480→                ${isPast ? 'opacity-35' : ''}
+   481→   481→                ${isNext ? 'bg-islamic/3' : ''}
+   482→   482→                ${index < prayerOrder.length - 1 ? 'border-b border-border/20' : ''}
+   483→   483→                hover:bg-accent/40 transition-all duration-200
+   484→   484→              `}
+   485→   485→            >
+   486→   486→              {/* Sol: İlerleme çizgisi + İkon + İsim */}
+   487→   487→              <div className="flex items-center gap-3">
+   488→   488→                {/* Aktif/V Next Çizgisi */}
+   489→   489→                <div className={`
+   490→   490→                  w-1 h-7 rounded-full shrink-0 transition-colors
+   491→   491→                  ${isActive ? 'bg-islamic' : isNext ? 'bg-gold' : isPast ? 'bg-muted-foreground/20' : 'bg-islamic/20'}
+   492→   492→                `} />
+   493→   493→
+   494→   494→                <div className="min-w-0">
+   495→   495→                  <div className={`text-sm flex items-center gap-1.5 ${isActive ? 'font-bold text-islamic' : isNext ? 'font-medium text-foreground' : ''}`}>
+   496→   496→                    <span className="text-base leading-none">{prayer.icon}</span>
+   497→   497→                    <span>{prayer.label}</span>
+   498→   498→                    {isActive && (
+   499→   499→                      <Badge className="bg-islamic text-islamic-foreground text-[9px] px-1 py-0 h-4 ml-1">
+   500→   500→                        AKTİF
+   501→   501→                      </Badge>
+   502→   502→                    )}
+   503→   503→                    {isNext && !isActive && (
+   504→   504→                      <Badge variant="outline" className="border-gold text-gold text-[9px] px-1 py-0 h-4 ml-1 bg-gold/10 dark:text-amber-300 dark:border-amber-400/50 dark:bg-amber-400/10">
+   505→   505→                        SONRAKİ
+   506→   506→                      </Badge>
+   507→   507→                    )}
+   508→   508→                  </div>
+   509→   509→                </div>
+   510→   510→              </div>
+   511→   511→
+   512→   512→              {/* Sağ: Saat + Alarm */}
+   513→   513→              <div className="flex items-center gap-2 shrink-0">
+   514→   514→                <span className={`text-base font-mono tabular-nums ${isActive ? 'text-islamic font-bold' : isNext ? 'font-semibold' : 'text-foreground/80'}`}>
+   515→   515→                  {formatTime(time)}
+   516→   516→                </span>
+   517→   517→                {settings.alarms[prayer.key]?.alarm ? (
+   518→   518→                  <Bell className="w-3 h-3 text-islamic/40" />
+   519→   519→                ) : (
+   520→   520→                  <BellOff className="w-3 h-3 text-muted-foreground/25" />
+   521→   521→                )}
+   522→   522→              </div>
+   523→   523→            </div>
+   524→   524→          );
+   525→   525→        })}
+   526→   526→      </div>
+   527→   527→
+   528→   528→      {/* Ayarlar Butonu */}
+   529→   529→      <div className="px-4 py-3 border-t border-border/30 bg-muted/20">
+   530→   530→        <SettingsSheet
+   531→   531→          settings={settings}
+   532→   532→          updateSettings={updateSettings}
+   533→   533→          prayerOrder={prayerOrder}
+   534→   534→          pushSupported={pushSupported}
+   535→   535→          pushPermission={pushPermission}
+   536→   536→          enablePushNotifications={enablePushNotifications}
+   537→   537→          disablePushNotifications={disablePushNotifications}
+   538→   538→        />
+   539→   539→      </div>
+   540→   540→    </Card>
+   541→   541→  );
+   542→   542→}
+   543→   543→
+   544→   544→// ────────────────────────────────────────────────────────────
+   545→   545→// Ayarlar Sayfası
+   546→   546→// ────────────────────────────────────────────────────────────
+   547→   547→
+   548→   548→function SettingsSheet({
+   549→   549→  settings,
+   550→   550→  updateSettings,
+   551→   551→  prayerOrder,
+   552→   552→  pushSupported,
+   553→   553→  pushPermission,
+   554→   554→  enablePushNotifications,
+   555→   555→  disablePushNotifications,
+   556→   556→}: {
+   557→   557→  settings: any;
+   558→   558→  updateSettings: (partial: any) => void;
+   559→   559→  prayerOrder: PrayerInfo[];
+   560→   560→  pushSupported: boolean;
+   561→   561→  pushPermission: NotificationPermission | 'default';
+   562→   562→  enablePushNotifications: () => Promise<boolean>;
+   563→   563→  disablePushNotifications: () => Promise<void>;
+   564→   564→}) {
+   565→   565→  return (
+   566→   566→    <Sheet>
+   567→   567→      <SheetTrigger asChild>
+   568→   568→        <Button variant="outline" className="w-full gap-2 border-islamic/30 hover:bg-islamic/10 hover:border-islamic/50 transition-colors">
+   569→   569→          <Settings className="w-4 h-4" />
+   570→   570→          Ayarlar ve Hatırlatıcılar
+   571→   571→        </Button>
+   572→   572→      </SheetTrigger>
+   573→   573→      <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+   574→   574→        <SheetHeader>
+   575→   575→          <SheetTitle className="flex items-center gap-2">
+   576→   576→            <Settings className="w-5 h-5 text-islamic" />
+   577→   577→            Ayarlar
+   578→   578→          </SheetTitle>
+   579→   579→          <SheetDescription>Namaz vakti hesaplama ve hatırlatıcı ayarları</SheetDescription>
+   580→   580→        </SheetHeader>
+   581→   581→
+   582→   582→        <div className="mt-6 space-y-6">
+   583→   583→          {/* Hesaplama Yöntemi */}
+   584→   584→          <SettingsSection title="Hesaplama Yöntemi">
+   585→   585→            <Select
+   586→   586→              value={settings.calculationMethod}
+   587→   587→              onValueChange={(val) => updateSettings({ calculationMethod: val as CalculationMethod })}
+   588→   588→            >
+   589→   589→              <SelectTrigger>
+   590→   590→                <SelectValue />
+   591→   591→              </SelectTrigger>
+   592→   592→              <SelectContent>
+   593→   593→                {(Object.entries(METHOD_CONFIGS) as [CalculationMethod, { label: string }][]).map(([key, mc]) => (
+   594→   594→                  <SelectItem key={key} value={key}>{mc.label}</SelectItem>
+   595→   595→                ))}
+   596→   596→              </SelectContent>
+   597→   597→            </Select>
+   598→   598→
+   599→   599→            {/* İkindi Mezhebi - sadece SV dışı yöntemlerde göster */}
+   600→   600→            {settings.calculationMethod !== 'suleymaniye' && (
+   601→   601→              <div className="mt-3 space-y-1.5">
+   602→   602→                <Label className="text-xs">İkindi Vakti Mezhebi</Label>
+   603→   603→                <Select
+   604→   604→                  value={settings.asrMadhab}
+   605→   605→                  onValueChange={(val) => updateSettings({ asrMadhab: val as AsrMadhab })}
+   606→   606→                >
+   607→   607→                  <SelectTrigger>
+   608→   608→                    <SelectValue />
+   609→   609→                  </SelectTrigger>
+   610→   610→                  <SelectContent>
+   611→   611→                    <SelectItem value="standard">Standart (Şâfiî/Mâlikî/Hanbelî)</SelectItem>
+   612→   612→                    <SelectItem value="hanafi">Hanefî (Asr-ı Sânî)</SelectItem>
+   613→   613→                  </SelectContent>
+   614→   614→                </Select>
+   615→   615→                <p className="text-[10px] text-muted-foreground leading-relaxed">
+   616→   616→                  Hanefî mezhebine göre ikindi vakti, gölgenin eşya uzunluğunun 2 katına ulaşmasıyla başlar. Standart mezheplerde ise 1 katına ulaşmasıyla başlar.
+   617→   617→                </p>
+   618→   618→              </div>
+   619→   619→            )}
+   620→   620→          </SettingsSection>
+   621→   621→
+   622→   622→          <Separator />
+   623→   623→
+   624→   624→          {/* Push Bildirimleri */}
+   625→   625→          <SettingsSection title="Bildirim Sistemi">
+   626→   626→            {pushSupported ? (
+   627→   627→              <div className="space-y-3">
+   628→   628→                <div className="flex items-center justify-between">
+   629→   629→                  <div className="flex items-center gap-2">
+   630→   630→                    {settings.pushEnabled ? (
+   631→   631→                      <BellRing className="w-4 h-4 text-islamic" />
+   632→   632→                    ) : (
+   633→   633→                      <BellDot className="w-4 h-4 text-muted-foreground" />
+   634→   634→                    )}
+   635→   635→                    <div>
+   636→   636→                      <Label className="text-sm">Push Bildirimleri</Label>
+   637→   637→                      <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+   638→   638→                        {settings.pushEnabled
+   639→   639→                          ? 'Site kapalıyken bile bildirim alınır'
+   640→   640→                          : 'Açınca site kapalıyken de bildirim gelir'}
+   641→   641→                      </p>
+   642→   642→                    </div>
+   643→   643→                  </div>
+   644→   644→                  <Switch
+   645→   645→                    checked={settings.pushEnabled}
+   646→   646→                    onCheckedChange={async (val) => {
+   647→   647→                      if (val) {
+   648→   648→                        const success = await enablePushNotifications();
+   649→   649→                        if (success) {
+   650→   650→                          updateSettings({ pushEnabled: true });
+   651→   651→                        }
+   652→   652→                      } else {
+   653→   653→                        await disablePushNotifications();
+   654→   654→                        updateSettings({ pushEnabled: false });
+   655→   655→                      }
+   656→   656→                    }}
+   657→   657→                  />
+   658→   658→                </div>
+   659→   659→                {settings.pushEnabled && pushPermission === 'granted' && (
+   660→   660→                  <div className="flex items-center gap-2 p-2 rounded-md bg-islamic/5 border border-islamic/10">
+   661→   661→                    <BellRing className="w-3.5 h-3.5 text-islamic shrink-0" />
+   662→   662→                    <span className="text-[10px] text-islamic/70 leading-relaxed">
+   663→   663→                      Push bildirimleri aktif — tarayıcı kapalıyken bile vakti geldiğinde bildirim alacaksınız.
+   664→   664→                    </span>
+   665→   665→                  </div>
+   666→   666→                )}
+   667→   667→                {pushPermission === 'denied' && (
+   668→   668→                  <div className="flex items-center gap-2 p-2 rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/30">
+   669→   669→                    <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+   670→   670→                    <span className="text-[10px] text-red-600 dark:text-red-400 leading-relaxed">
+   671→   671→                      Bildirim izni reddedildi. Tarayıcı ayarlarından bildirim iznini açmanız gerekiyor.
+   672→   672→                    </span>
+   673→   673→                  </div>
+   674→   674→                )}
+   675→   675→              </div>
+   676→   676→            ) : (
+   677→   677→              <div className="flex items-center gap-2 p-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/30">
+   678→   678→                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+   679→   679→                <span className="text-[10px] text-amber-600 dark:text-amber-400 leading-relaxed">
+   680→   680→                  Tarayıcınız push bildirimleri desteklemiyor. Bildirimler sadece site açıkken çalışır.
+   681→   681→                </span>
+   682→   682→              </div>
+   683→   683→            )}
+   684→   684→          </SettingsSection>
+   685→   685→
+   686→   686→          <Separator />
+   687→   687→
+   688→   688→          {/* Hatırlatıcılar */}
+   689→   689→          <SettingsSection title="Vakit Hatırlatıcıları">
+   690→   690→            <p className="text-xs text-muted-foreground mb-3">
+   691→   691→              Her vakit için bildirim açıp kapatabilir, erken uyarı süresi seçebilirsiniz.
+   692→   692→            </p>
+   693→   693→            <div className="space-y-2">
+   694→   694→              {prayerOrder.map((prayer) => (
+   695→   695→                <AlarmSetting
+   696→   696→                  key={prayer.key}
+   697→   697→                  prayer={prayer}
+   698→   698→                  alarm={settings.alarms[prayer.key]}
+   699→   699→                  onChange={(alarm) => {
+   700→   700→                    updateSettings({
+   701→   701→                      alarms: {
+   702→   702→                        ...settings.alarms,
+   703→   703→                        [prayer.key]: alarm,
+   704→   704→                      },
+   705→   705→                    });
+   706→   706→                  }}
+   707→   707→                />
+   708→   708→              ))}
+   709→   709→            </div>
+   710→   710→          </SettingsSection>
+   711→   711→
+   712→   712→          <Separator />
+   713→   713→
+   714→   714→          {/* Konum Ayarları */}
+   715→   715→          <SettingsSection title="Konum Ayarları">
+   716→   716→            <div className="space-y-3">
+   717→   717→              <div className="flex items-center justify-between">
+   718→   718→                <Label className="text-sm">Otomatik konum tespiti</Label>
+   719→   719→                <Switch
+   720→   720→                  checked={settings.useAutoLocation}
+   721→   721→                  onCheckedChange={(val) => updateSettings({ useAutoLocation: val })}
+   722→   722→                />
+   723→   723→              </div>
+   724→   724→
+   725→   725→              {!settings.useAutoLocation && (
+   726→   726→                <div className="space-y-3 pl-1">
+   727→   727→                  <div className="space-y-1.5">
+   728→   728→                    <Label className="text-xs">Enlem (Latitude)</Label>
+   729→   729→                    <Input
+   730→   730→                      type="number"
+   731→   731→                      step="0.0001"
+   732→   732→                      value={settings.manualLatitude}
+   733→   733→                      onChange={(e) => updateSettings({ manualLatitude: parseFloat(e.target.value) || 0 })}
+   734→   734→                    />
+   735→   735→                  </div>
+   736→   736→                  <div className="space-y-1.5">
+   737→   737→                    <Label className="text-xs">Boylam (Longitude)</Label>
+   738→   738→                    <Input
+   739→   739→                      type="number"
+   740→   740→                      step="0.0001"
+   741→   741→                      value={settings.manualLongitude}
+   742→   742→                      onChange={(e) => updateSettings({ manualLongitude: parseFloat(e.target.value) || 0 })}
+   743→   743→                    />
+   744→   744→                  </div>
+   745→   745→                  <div className="space-y-1.5">
+   746→   746→                    <Label className="text-xs">Şehir Adı</Label>
+   747→   747→                    <Input
+   748→   748→                      value={settings.manualCity}
+   749→   749→                      onChange={(e) => updateSettings({ manualCity: e.target.value })}
+   750→   750→                    />
+   751→   751→                  </div>
+   752→   752→                </div>
+   753→   753→              )}
+   754→   754→            </div>
+   755→   755→          </SettingsSection>
+   756→   756→        </div>
+   757→   757→      </SheetContent>
+   758→   758→    </Sheet>
+   759→   759→  );
+   760→   760→}
+   761→   761→
+   762→   762→function SettingsSection({ title, children }: { title: string; children: React.ReactNode }) {
+   763→   763→  return (
+   764→   764→    <div>
+   765→   765→      <h3 className="text-sm font-semibold mb-3">{title}</h3>
+   766→   766→      {children}
+   767→   767→    </div>
+   768→   768→  );
+   769→   769→}
+   770→   770→
+   771→   771→function AlarmSetting({
+   772→   772→  prayer,
+   773→   773→  alarm,
+   774→   774→  onChange,
+   775→   775→}: {
+   776→   776→  prayer: PrayerInfo;
+   777→   777→  alarm: any;
+   778→   778→  onChange: (alarm: any) => void;
+   779→   779→}) {
+   780→   780→  const isPreAlarmAvailable = true;
+   781→   781→
+   782→   782→  return (
+   783→   783→    <div className={`flex items-center justify-between py-1.5 px-2 rounded-md ${alarm?.alarm ? 'bg-islamic/3' : ''}`}>
+   784→   784→      <div className="flex items-center gap-2">
+   785→   785→        <span className="text-sm leading-none">{prayer.icon}</span>
+   786→   786→        <span className="text-sm">{prayer.label}</span>
+   787→   787→      </div>
+   788→   788→      <div className="flex items-center gap-2">
+   789→   789→        {/* Pre-alarm (sadece seher ve imsak) */}
+   790→   790→        {isPreAlarmAvailable && alarm?.alarm && (
+   791→   791→          <Select
+   792→   792→            value={alarm.preAlarm?.enabled ? String(alarm.preAlarm.minutes) : '0'}
+   793→   793→            onValueChange={(val) => {
+   794→   794→              onChange({
+   795→   795→                ...alarm,
+   796→   796→                preAlarm: {
+   797→   797→                  enabled: val !== '0',
+   798→   798→                  minutes: parseInt(val) || 15,
+   799→   799→                },
+   800→   800→              });
+   801→   801→            }}
+   802→   802→          >
+   803→   803→            <SelectTrigger className="h-7 w-[96px] text-xs">
+   804→   804→              <SelectValue />
+   805→   805→            </SelectTrigger>
+   806→   806→            <SelectContent>
+   807→   807→              <SelectItem value="0">Yok</SelectItem>
+   808→   808→              <SelectItem value="5">5 dk</SelectItem>
+   809→   809→              <SelectItem value="10">10 dk</SelectItem>
+   810→   810→              <SelectItem value="15">15 dk</SelectItem>
+   811→   811→              <SelectItem value="30">30 dk</SelectItem>
+   812→   812→              <SelectItem value="45">45 dk</SelectItem>
+   813→   813→            </SelectContent>
+   814→   814→          </Select>
+   815→   815→        )}
+   816→   816→        <Switch
+   817→   817→          checked={alarm?.alarm ?? true}
+   818→   818→          onCheckedChange={(val) => {
+   819→   819→            onChange({
+   820→   820→              ...alarm,
+   821→   821→              alarm: val,
+   822→   822→            });
+   823→   823→          }}
+   824→   824→        />
+   825→   825→      </div>
+   826→   826→    </div>
+   827→   827→  );
+   828→   828→}
+   829→   829→
+   830→   830→// ────────────────────────────────────────────────────────────
+   831→   831→// Konum Bildirim Toast
+   832→   832→// ────────────────────────────────────────────────────────────
+   833→   833→
+   834→   834→function LocationBanner({
+   835→   835→  source,
+   836→   836→  onDismiss,
+   837→   837→  onRetry,
+   838→   838→}: {
+   839→   839→  source: LocationSource;
+   840→   840→  onDismiss: () => void;
+   841→   841→  onRetry: () => Promise<void>;
+   842→   842→}) {
+   843→   843→  const [visible, setVisible] = useState(false);
+   844→   844→  const isIP = source === 'ip';
+   845→   845→  const onDismissRef = useRef(onDismiss);
+   846→   846→
+   847→   847→  // Ref'i effect içinde güncelle (render sırasında değil)
+   848→   848→  useEffect(() => {
+   849→   849→    onDismissRef.current = onDismiss;
+   850→   850→  }, [onDismiss]);
+   851→   851→
+   852→   852→  // Görünürlük animasyonu + otomatik kapanma
+   853→   853→  useEffect(() => {
+   854→   854→    // Giriş animasyonu
+   855→   855→    requestAnimationFrame(() => setVisible(true));
+   856→   856→
+   857→   857→    // 8 saniye sonra otomatik kapan
+   858→   858→    const timer = setTimeout(() => {
+   859→   859→      setVisible(false);
+   860→   860→      setTimeout(() => onDismissRef.current(), 500); // Çıkış animasyonu bitince kaldır
+   861→   861→    }, 8000);
+   862→   862→
+   863→   863→    return () => clearTimeout(timer);
+   864→   864→  }, []);
+   865→   865→
+   866→   866→  const handleDismiss = useCallback(() => {
+   867→   867→    setVisible(false);
+   868→   868→    setTimeout(() => onDismissRef.current(), 500);
+   869→   869→  }, []);
+   870→   870→
+   871→   871→  return (
+   872→   872→    <div className={`
+   873→   873→      fixed bottom-4 left-4 right-4 z-50 flex justify-center
+   874→   874→      transition-all duration-[400ms] ease-out
+   875→   875→      ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}
+   876→   876→    `}>
+   877→   877→      <div className={`
+   878→   878→        w-full max-w-md rounded-xl border shadow-lg p-3 text-sm
+   879→   879→        ${isIP
+   880→   880→          ? 'border-amber-500/40 bg-amber-50 dark:bg-amber-950/40'
+   881→   881→          : 'border-red-500/40 bg-red-50 dark:bg-red-950/40'
+   882→   882→        }
+   883→   883→        backdrop-blur-sm
+   884→   884→      `}>
+   885→   885→        {/* Kapat butonu */}
+   886→   886→        <button
+   887→   887→          onClick={handleDismiss}
+   888→   888→          className="absolute top-2 right-2 p-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+   889→   889→          aria-label="Kapat"
+   890→   890→        >
+   891→   891→          <X className="w-3.5 h-3.5 text-muted-foreground" />
+   892→   892→        </button>
+   893→   893→
+   894→   894→        <div className="flex gap-3 pr-6">
+   895→   895→          {/* İkon */}
+   896→   896→          <div className={`
+   897→   897→            shrink-0 w-8 h-8 rounded-full flex items-center justify-center
+   898→   898→            ${isIP
+   899→   899→              ? 'bg-amber-100 dark:bg-amber-900/50'
+   900→   900→              : 'bg-red-100 dark:bg-red-900/50'
+   901→   901→            }
+   902→   902→          `}>
+   903→   903→            {isIP
+   904→   904→              ? <Wifi className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+   905→   905→              : <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400" />
+   906→   906→            }
+   907→   907→          </div>
+   908→   908→
+   909→   909→          {/* Metin */}
+   910→   910→          <div className="flex-1 min-w-0">
+   911→   911→            <p className={`font-semibold text-xs ${isIP ? 'text-amber-800 dark:text-amber-300' : 'text-red-800 dark:text-red-300'}`}>
+   912→   912→              {isIP ? 'IP Tabanlı Konum Tespit Edildi' : 'Tam Konum Alınamadı'}
+   913→   913→            </p>
+   914→   914→            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+   915→   915→              {isIP
+   916→   916→                ? 'Konum izni verilmediği için IP adresine göre yaklaşık konum kullanılıyor. Vakit hesaplamalarında sapma olabilir.'
+   917→   917→                : 'Cihaz konumu ve IP tabanlı konum alınamadı. Varsayılan İstanbul konumu kullanılıyor.'
+   918→   918→              }
+   919→   919→            </p>
+   920→   920→            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+   921→   921→              <span className="font-medium text-foreground">Tam konum için:</span> Tarayıcı ayarlarından konum iznini açın, sayfayı yenileyin veya ayarlardan konumu manuel girin.
+   922→   922→            </p>
+   923→   923→
+   924→   924→            {/* Aksiyonlar */}
+   925→   925→            <div className="flex gap-2 mt-2">
+   926→   926→              <Button
+   927→   927→                variant="outline"
+   928→   928→                size="sm"
+   929→   929→                className="h-7 text-xs gap-1.5"
+   930→   930→                onClick={async () => { await onRetry(); handleDismiss(); }}
+   931→   931→              >
+   932→   932→                <Navigation className="w-3 h-3" />
+   933→   933→                Tekrar Dene
+   934→   934→              </Button>
+   935→   935→            </div>
+   936→   936→          </div>
+   937→   937→        </div>
+   938→   938→
+   939→   939→        {/* İlerleme çubuğu (otomatik kapanma göstergesi) */}
+   940→   940→        <div className="mt-2 h-0.5 rounded-full overflow-hidden bg-black/5 dark:bg-white/5">
+   941→   941→          <div className={`
+   942→   942→            h-full rounded-full
+   943→   943→            ${isIP ? 'bg-amber-500/50' : 'bg-red-500/50'}
+   944→   944→          `} style={{ animation: 'shrink-bar 8s linear forwards' }} />
+   945→   945→        </div>
+   946→   946→      </div>
+   947→   947→    </div>
+   948→   948→  );
+   949→   949→}
+   950→   950→
+   951→   951→// ────────────────────────────────────────────────────────────
+   952→   952→// Alt Bilgi
+   953→   953→// ────────────────────────────────────────────────────────────
+   954→   954→
+   955→   955→function Footer({ method }: { method: CalculationMethod }) {
+   956→   956→  const isSuleymaniye = method === 'suleymaniye';
+   957→   957→  const methodLabel = METHOD_CONFIGS[method].label;
+   958→   958→
+   959→   959→  return (
+   960→   960→    <footer className="w-full py-3 px-4 text-center">
+   961→   961→      <div className="flex items-center justify-center gap-2 mb-1">
+   962→   962→        <div className="h-px w-8 bg-islamic/20" />
+   963→   963→        {isSuleymaniye ? (
+   964→   964→          <span className="text-xs text-islamic/60 font-medium">MÎZAN</span>
+   965→   965→        ) : (
+   966→   966→          <span className="text-xs text-islamic/60 font-medium">ADHAN</span>
+   967→   967→        )}
+   968→   968→        <div className="h-px w-8 bg-islamic/20" />
+   969→   969→      </div>
+   970→   970→      <p className="text-[10px] text-muted-foreground/50">
+   971→   971→        {isSuleymaniye ? 'Süleymaniye Vakfı · Mîzan Metodolojisi' : methodLabel}
+   972→   972→      </p>
+   973→   973→    </footer>
+   974→   974→  );
+   975→   975→}
+   976→   976→

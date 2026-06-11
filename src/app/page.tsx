@@ -14,6 +14,7 @@ import {
   type PrayerTimes,
   type PrayerInfo,
 } from '@/lib/prayer-calculator';
+import { ColorThemeProvider, useColorTheme, COLOR_THEMES, type ColorThemeKey } from '@/lib/theme-context';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -23,6 +24,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescri
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { useTheme } from 'next-themes';
 import {
   Settings,
   MapPin,
@@ -38,6 +40,8 @@ import {
   Wifi,
   BellRing,
   BellDot,
+  Palette,
+  Check,
 } from 'lucide-react';
 
 // ────────────────────────────────────────────────────────────
@@ -47,7 +51,9 @@ import {
 export default function Home() {
   return (
     <PrayerAppProvider>
-      <PrayerApp />
+      <ColorThemeProvider>
+        <PrayerApp />
+      </ColorThemeProvider>
     </PrayerAppProvider>
   );
 }
@@ -75,27 +81,14 @@ function PrayerApp() {
     disablePushNotifications,
   } = usePrayerApp();
 
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    const saved = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    return saved === 'dark' || (!saved && prefersDark);
-  });
+  const { theme, setTheme, resolvedTheme } = useTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [locationBannerDismissed, setLocationBannerDismissed] = useState(false);
 
-  // Dark mode sync with DOM
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', isDark);
-  }, [isDark]);
-
+  const isDark = resolvedTheme === 'dark';
   const toggleDark = useCallback(() => {
-    setIsDark((prev: boolean) => {
-      const next = !prev;
-      localStorage.setItem('theme', next ? 'dark' : 'light');
-      return next;
-    });
-  }, []);
+    setTheme(isDark ? 'light' : 'dark');
+  }, [isDark, setTheme]);
 
   // Saat güncelleme
   useEffect(() => {
@@ -216,6 +209,23 @@ function Header({
   onRefresh: () => void;
   error: string | null;
 }) {
+  const { colorTheme, setColorTheme } = useColorTheme();
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Dış tıklamada menüyü kapat
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setThemeMenuOpen(false);
+      }
+    }
+    if (themeMenuOpen) {
+      document.addEventListener('mousedown', handleClick);
+    }
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [themeMenuOpen]);
+
   return (
     <header className="w-full bg-islamic text-islamic-foreground shadow-lg relative overflow-hidden">
       {/* Dekoratif geometrik desen */}
@@ -234,6 +244,60 @@ function Header({
             </span>
           </div>
           <div className="flex items-center gap-1">
+            {/* Tema Seçici */}
+            <div className="relative" ref={menuRef}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-islamic-foreground/80 hover:text-islamic-foreground hover:bg-islamic-light/20"
+                onClick={() => setThemeMenuOpen(!themeMenuOpen)}
+                aria-label="Tema seç"
+              >
+                <Palette className="w-4 h-4" />
+              </Button>
+
+              {/* Tema Açılır Menüsü */}
+              {themeMenuOpen && (
+                <div className="absolute right-0 top-full mt-2 z-50 w-56 rounded-xl border border-border bg-popover shadow-xl p-3 space-y-1.5">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">
+                    Renk Teması
+                  </div>
+                  {COLOR_THEMES.map((t) => (
+                    <button
+                      key={t.key}
+                      className={`
+                        w-full flex items-center gap-3 px-2.5 py-2 rounded-lg text-left
+                        transition-colors duration-150
+                        ${colorTheme === t.key
+                          ? 'bg-islamic/10 text-islamic'
+                          : 'hover:bg-accent text-foreground'
+                        }
+                      `}
+                      onClick={() => {
+                        setColorTheme(t.key);
+                        setThemeMenuOpen(false);
+                      }}
+                    >
+                      {/* Renk önizlemesi */}
+                      <div className={`
+                        w-5 h-5 rounded-full shrink-0 border-2
+                        ${isDark ? t.swatchDark : t.swatch}
+                        ${colorTheme === t.key ? 'border-islamic ring-2 ring-islamic/30' : 'border-border'}
+                      `} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium flex items-center gap-1.5">
+                          {t.icon} {t.label}
+                          {colorTheme === t.key && (
+                            <Check className="w-3.5 h-3.5 text-islamic" />
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <Button
               variant="ghost"
               size="icon"
@@ -273,8 +337,6 @@ function Header({
             {currentTime.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
           </span>
         </div>
-
-        {/* Hata mesajı kaldırıldı — sessiz fallback */}
       </div>
     </header>
   );
@@ -485,7 +547,7 @@ function PrayerTimesList({
             >
               {/* Sol: İlerleme çizgisi + İkon + İsim */}
               <div className="flex items-center gap-3">
-                {/* Aktif/V Next Çizgisi */}
+                {/* Aktif/Sonraki Çizgisi */}
                 <div className={`
                   w-1 h-7 rounded-full shrink-0 transition-colors
                   ${isActive ? 'bg-islamic' : isNext ? 'bg-gold' : isPast ? 'bg-muted-foreground/20' : 'bg-islamic/20'}
@@ -501,7 +563,7 @@ function PrayerTimesList({
                       </Badge>
                     )}
                     {isNext && !isActive && (
-                      <Badge variant="outline" className="border-gold text-gold text-[9px] px-1 py-0 h-4 ml-1 bg-gold/10 dark:text-amber-300 dark:border-amber-400/50 dark:bg-amber-400/10">
+                      <Badge variant="outline" className="border-gold text-gold-foreground bg-gold/10 text-[9px] px-1 py-0 h-4 ml-1">
                         SONRAKİ
                       </Badge>
                     )}
@@ -562,6 +624,8 @@ function SettingsSheet({
   enablePushNotifications: () => Promise<boolean>;
   disablePushNotifications: () => Promise<void>;
 }) {
+  const { colorTheme, setColorTheme } = useColorTheme();
+
   return (
     <Sheet>
       <SheetTrigger asChild>
@@ -580,6 +644,42 @@ function SettingsSheet({
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
+          {/* Renk Teması */}
+          <SettingsSection title="Renk Teması">
+            <div className="grid grid-cols-3 gap-2">
+              {COLOR_THEMES.map((t) => (
+                <button
+                  key={t.key}
+                  className={`
+                    relative flex flex-col items-center gap-1.5 p-2.5 rounded-xl border-2
+                    transition-all duration-150
+                    ${colorTheme === t.key
+                      ? 'border-islamic bg-islamic/5 shadow-sm'
+                      : 'border-border hover:border-islamic/30 hover:bg-accent/30'
+                    }
+                  `}
+                  onClick={() => setColorTheme(t.key)}
+                >
+                  {/* Renk dairesi */}
+                  <div className="relative">
+                    <div className={`w-8 h-8 rounded-full ${t.swatch} dark:${t.swatchDark}`} />
+                    {colorTheme === t.key && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Check className="w-4 h-4 text-white drop-shadow-md" />
+                      </div>
+                    )}
+                  </div>
+                  {/* Etiket */}
+                  <div className="text-[10px] font-medium text-center leading-tight">
+                    {t.label}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </SettingsSection>
+
+          <Separator />
+
           {/* Hesaplama Yöntemi */}
           <SettingsSection title="Hesaplama Yöntemi">
             <Select
@@ -665,18 +765,18 @@ function SettingsSheet({
                   </div>
                 )}
                 {pushPermission === 'denied' && (
-                  <div className="flex items-center gap-2 p-2 rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/30">
-                    <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                    <span className="text-[10px] text-red-600 dark:text-red-400 leading-relaxed">
+                  <div className="flex items-center gap-2 p-2 rounded-md bg-destructive/5 border border-destructive/20">
+                    <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />
+                    <span className="text-[10px] text-destructive leading-relaxed">
                       Bildirim izni reddedildi. Tarayıcı ayarlarından bildirim iznini açmanız gerekiyor.
                     </span>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-2 p-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/30">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                <span className="text-[10px] text-amber-600 dark:text-amber-400 leading-relaxed">
+              <div className="flex items-center gap-2 p-2 rounded-md bg-gold/5 border border-gold/20">
+                <AlertTriangle className="w-3.5 h-3.5 text-gold shrink-0" />
+                <span className="text-[10px] text-gold-foreground leading-relaxed">
                   Tarayıcınız push bildirimleri desteklemiyor. Bildirimler sadece site açıkken çalışır.
                 </span>
               </div>
@@ -786,7 +886,7 @@ function AlarmSetting({
         <span className="text-sm">{prayer.label}</span>
       </div>
       <div className="flex items-center gap-2">
-        {/* Pre-alarm (sadece seher ve imsak) */}
+        {/* Pre-alarm */}
         {isPreAlarmAvailable && alarm?.alarm && (
           <Select
             value={alarm.preAlarm?.enabled ? String(alarm.preAlarm.minutes) : '0'}
@@ -844,20 +944,18 @@ function LocationBanner({
   const isIP = source === 'ip';
   const onDismissRef = useRef(onDismiss);
 
-  // Ref'i effect içinde güncelle (render sırasında değil)
+  // Ref'i effect içinde güncelle
   useEffect(() => {
     onDismissRef.current = onDismiss;
   }, [onDismiss]);
 
   // Görünürlük animasyonu + otomatik kapanma
   useEffect(() => {
-    // Giriş animasyonu
     requestAnimationFrame(() => setVisible(true));
 
-    // 8 saniye sonra otomatik kapan
     const timer = setTimeout(() => {
       setVisible(false);
-      setTimeout(() => onDismissRef.current(), 500); // Çıkış animasyonu bitince kaldır
+      setTimeout(() => onDismissRef.current(), 500);
     }, 8000);
 
     return () => clearTimeout(timer);
@@ -877,8 +975,8 @@ function LocationBanner({
       <div className={`
         w-full max-w-md rounded-xl border shadow-lg p-3 text-sm
         ${isIP
-          ? 'border-amber-500/40 bg-amber-50 dark:bg-amber-950/40'
-          : 'border-red-500/40 bg-red-50 dark:bg-red-950/40'
+          ? 'border-gold/40 bg-gold/5'
+          : 'border-destructive/40 bg-destructive/5'
         }
         backdrop-blur-sm
       `}>
@@ -895,20 +993,17 @@ function LocationBanner({
           {/* İkon */}
           <div className={`
             shrink-0 w-8 h-8 rounded-full flex items-center justify-center
-            ${isIP
-              ? 'bg-amber-100 dark:bg-amber-900/50'
-              : 'bg-red-100 dark:bg-red-900/50'
-            }
+            ${isIP ? 'bg-gold/10' : 'bg-destructive/10'}
           `}>
             {isIP
-              ? <Wifi className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-              : <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400" />
+              ? <Wifi className="w-4 h-4 text-gold" />
+              : <AlertTriangle className="w-4 h-4 text-destructive" />
             }
           </div>
 
           {/* Metin */}
           <div className="flex-1 min-w-0">
-            <p className={`font-semibold text-xs ${isIP ? 'text-amber-800 dark:text-amber-300' : 'text-red-800 dark:text-red-300'}`}>
+            <p className={`font-semibold text-xs ${isIP ? 'text-gold-foreground' : 'text-destructive'}`}>
               {isIP ? 'IP Tabanlı Konum Tespit Edildi' : 'Tam Konum Alınamadı'}
             </p>
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
@@ -936,11 +1031,11 @@ function LocationBanner({
           </div>
         </div>
 
-        {/* İlerleme çubuğu (otomatik kapanma göstergesi) */}
+        {/* İlerleme çubuğu */}
         <div className="mt-2 h-0.5 rounded-full overflow-hidden bg-black/5 dark:bg-white/5">
           <div className={`
             h-full rounded-full
-            ${isIP ? 'bg-amber-500/50' : 'bg-red-500/50'}
+            ${isIP ? 'bg-gold/50' : 'bg-destructive/50'}
           `} style={{ animation: 'shrink-bar 8s linear forwards' }} />
         </div>
       </div>

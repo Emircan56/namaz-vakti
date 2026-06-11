@@ -1,0 +1,916 @@
+     1→/**
+     2→ * Namaz Vakti Hesaplama Motoru
+     3→ * =================================================
+     4→ * Süleymaniye Vakfı: Fıkhî-astronomik Mîzan metodolojisi (özel hesaplama)
+     5→ * Diğer yöntemler: Adhan kütüphanesi kullanılarak hesaplanır
+     6→ *
+     7→ * Temel kaynak: Süleymaniye Vakfı Mîzan sistemi / Adhan kütüphanesi
+     8→ */
+     9→
+    10→import {
+    11→  CalculationMethod as AdhanCalculationMethod,
+    12→  CalculationParameters,
+    13→  Coordinates,
+    14→  HighLatitudeRule,
+    15→  Madhab,
+    16→  PolarCircleResolution,
+    17→  PrayerTimes as AdhanPrayerTimes,
+    18→  Rounding,
+    19→} from 'adhan';
+    20→
+    21→// ────────────────────────────────────────────────────────────
+    22→// Tip Tanımlamaları
+    23→// ────────────────────────────────────────────────────────────
+    24→
+    25→export type AsrType = 'evvel' | 'sani';
+    26→
+    27→export type CalculationMethod =
+    28→  | 'suleymaniye'  // Süleymaniye Vakfı (Mîzan) — özel hesaplama
+    29→  | 'diyanet'      // Diyanet (Türkiye) — Adhan: Turkey
+    30→  | 'mwl'          // Müslüman Dünyası Ligi — Adhan: MuslimWorldLeague
+    31→  | 'isna'         // ISNA (Kuzey Amerika) — Adhan: NorthAmerica
+    32→  | 'egyptian'     // Mısır Genel Meclisi — Adhan: Egyptian
+    33→  | 'karachi'      // University of Islamic Sciences, Karachi — Adhan: Karachi
+    34→  | 'ummalqura'    // Ümmü'l-Kurâ (Mekke) — Adhan: UmmAlQura
+    35→  | 'dubai'        // Dubai (BAE) — Adhan: Dubai
+    36→  | 'qatar'        // Katar — Adhan: Qatar
+    37→  | 'kuwait'       // Kuveyt — Adhan: Kuwait
+    38→  | 'singapore'    // Singapur — Adhan: Singapore
+    39→  | 'tehran';      // Tahran — Adhan: Tehran
+    40→
+    41→export interface PrayerTimes {
+    42→  seher: Date;       // Fecr-i Kâzib (-18°) — sadece Süleymaniye
+    43→  imsak: Date;       // Fecr-i Sâdık / Fajr
+    44→  gunes: Date;       // Güneş Doğuşu / Sunrise
+    45→  ogle: Date;        // Zeval (Meridyen geçişi) / Dhuhr
+    46→  ikindi: Date;      // Asr (gölge formülü)
+    47→  aksam: Date;       // Güneş Batışı / Maghrib
+    48→  yatsi: Date;       // İşâ / Isha
+    49→  yatsiSonu: Date;   // Akşam tarafı -18° — sadece Süleymaniye
+    50→}
+    51→
+    52→export interface PrayerTimeResult {
+    53→  times: PrayerTimes;
+    54→  isHighLatitude: boolean;
+    55→  mizanApplied: boolean;
+    56→  declination: number;
+    57→  eqt: number;
+    58→  method: CalculationMethod;
+    59→}
+    60→
+    61→export interface Location {
+    62→  latitude: number;   // Enlem (derece)
+    63→  longitude: number;  // Boylam (derece)
+    64→  timezone: number;   // Saat dilimi offset (saat)
+    65→  city?: string;
+    66→  country?: string;
+    67→}
+    68→
+    69→export interface CalculatorConfig {
+    70→  asrType: AsrType;
+    71→  method: CalculationMethod;
+    72→  seherAngle: number;    // Varsayılan: -18
+    73→  imsakAngle: number;    // Varsayılan: -9 (SV), -18 (Diyanet/MWL), -15 (ISNA), -19.5 (Egypt)
+    74→  yatsiAngle: number;    // Varsayılan: -9 (SV), -17 (Diyanet/MWL), -15 (ISNA), -17.5 (Egypt)
+    75→  gunesRefraction: number; // Varsayılan: 0.833
+    76→  temkin: number;        // Dakika cinsinden temkin (0 = SV, 2 = Diyanet)
+    77→}
+    78→
+    79→export interface MethodConfig {
+    80→  label: string;
+    81→  /** Adhan kütüphanesi yöntem adı (sadece non-SV için) */
+    82→  adhanMethod?: string;
+    83→  /** SV hesaplama parametreleri (sadece SV için) */
+    84→  imsakAngle?: number;
+    85→  yatsiAngle?: number;
+    86→  temkin?: number;
+    87→  asrType?: AsrType;
+    88→  /** Hanafi mezhebi mi? (ikindi için) */
+    89→  hanafi?: boolean;
+    90→}
+    91→
+    92→export const METHOD_CONFIGS: Record<CalculationMethod, MethodConfig> = {
+    93→  suleymaniye:  { label: 'Süleymaniye Vakfı (Mîzan)', imsakAngle: -9, yatsiAngle: -9, temkin: 0, asrType: 'evvel', hanafi: false },
+    94→  diyanet:      { label: 'Diyanet (Türkiye)', adhanMethod: 'Turkey', hanafi: false },
+    95→  mwl:          { label: 'Müslüman Dünyası Ligi', adhanMethod: 'MuslimWorldLeague', hanafi: false },
+    96→  isna:         { label: 'ISNA (Kuzey Amerika)', adhanMethod: 'NorthAmerica', hanafi: false },
+    97→  egyptian:     { label: 'Mısır Genel Meclisi', adhanMethod: 'Egyptian', hanafi: false },
+    98→  karachi:      { label: 'Karachi', adhanMethod: 'Karachi', hanafi: false },
+    99→  ummalqura:    { label: 'Ümmü\'l-Kurâ (Mekke)', adhanMethod: 'UmmAlQura', hanafi: false },
+   100→  dubai:        { label: 'Dubai (BAE)', adhanMethod: 'Dubai', hanafi: true },
+   101→  qatar:        { label: 'Katar', adhanMethod: 'Qatar', hanafi: false },
+   102→  kuwait:       { label: 'Kuveyt', adhanMethod: 'Kuwait', hanafi: false },
+   103→  singapore:    { label: 'Singapur', adhanMethod: 'Singapore', hanafi: false },
+   104→  tehran:       { label: 'Tahran', adhanMethod: 'Tehran', hanafi: false },
+   105→};
+   106→
+   107→export const DEFAULT_CONFIG: CalculatorConfig = {
+   108→  asrType: 'evvel',
+   109→  method: 'suleymaniye',
+   110→  seherAngle: -18,
+   111→  imsakAngle: -9,
+   112→  yatsiAngle: -9,
+   113→  gunesRefraction: 0.833,
+   114→  temkin: 0,
+   115→};
+   116→
+   117→/**
+   118→ * Adhan kütüphanesinden hesaplama parametrelerini alır
+   119→ */
+   120→function getAdhanParams(method: CalculationMethod): CalculationParameters {
+   121→  const config = METHOD_CONFIGS[method];
+   122→  const adhanMethod = config.adhanMethod;
+   123→
+   124→  if (!adhanMethod) {
+   125→    // SV için MWL kullanılır ama sonuç göz ardı edilir
+   126→    return AdhanCalculationMethod.MuslimWorldLeague();
+   127→  }
+   128→
+   129→  switch (adhanMethod) {
+   130→    case 'MuslimWorldLeague': return AdhanCalculationMethod.MuslimWorldLeague();
+   131→    case 'Egyptian': return AdhanCalculationMethod.Egyptian();
+   132→    case 'Karachi': return AdhanCalculationMethod.Karachi();
+   133→    case 'UmmAlQura': return AdhanCalculationMethod.UmmAlQura();
+   134→    case 'Dubai': return AdhanCalculationMethod.Dubai();
+   135→    case 'MoonsightingCommittee': return AdhanCalculationMethod.MoonsightingCommittee();
+   136→    case 'NorthAmerica': return AdhanCalculationMethod.NorthAmerica();
+   137→    case 'Kuwait': return AdhanCalculationMethod.Kuwait();
+   138→    case 'Qatar': return AdhanCalculationMethod.Qatar();
+   139→    case 'Singapore': return AdhanCalculationMethod.Singapore();
+   140→    case 'Tehran': return AdhanCalculationMethod.Tehran();
+   141→    case 'Turkey': return AdhanCalculationMethod.Turkey();
+   142→    default: return AdhanCalculationMethod.MuslimWorldLeague();
+   143→  }
+   144→}
+   145→
+   146→/**
+   147→ * Adhan kütüphanesi ile namaz vakitlerini hesaplar
+   148→ * @param asrMadhab - İkindi mezhebi seçimi: 'standard' (Shafi'i) veya 'hanafi'
+   149→ */
+   150→function calculateWithAdhan(date: Date, location: Location, method: CalculationMethod, asrMadhab?: 'standard' | 'hanafi'): PrayerTimeResult {
+   151→  const coords = new Coordinates(location.latitude, location.longitude);
+   152→  const params = getAdhanParams(method);
+   153→
+   154→  // İkindi mezhebi ayarı: kullanıcı seçimi öncelikli, sonra yöntem varsayılanı
+   155→  const useHanafi = asrMadhab === 'hanafi' || (asrMadhab === undefined && METHOD_CONFIGS[method].hanafi);
+   156→  if (useHanafi) {
+   157→    params.madhab = Madhab.Hanafi;
+   158→  }
+   159→
+   160→  // Yüksek enlem kuralı
+   161→  params.highLatitudeRule = HighLatitudeRule.recommended(coords);
+   162→
+   163→  // Kutup dairesi çözümleme
+   164→  params.polarCircleResolution = PolarCircleResolution.AqrabYaum;
+   165→
+   166→  // Yuvarlama: yukarı (temkin amaçlı)
+   167→  params.rounding = Rounding.Up;
+   168→
+   169→  // Kullanıcının yerel tarihini hesapla (sunucu saat diliminden bağımsız)
+   170→  const utcMs = date.getTime();
+   171→  const userLocalMs = utcMs + location.timezone * 3600000;
+   172→  const userLocalDate = new Date(userLocalMs);
+   173→  const year = userLocalDate.getUTCFullYear();
+   174→  const month = userLocalDate.getUTCMonth();
+   175→  const day = userLocalDate.getUTCDate();
+   176→
+   177→  // Adhan kütüphanesine kullanıcının yerel tarihini ver
+   178→  // Adhan, Date'in yerel metodlarını kullanarak tarihi belirler
+   179→  // Bu yüzden UTC saatini kullanıcının yerel tarihine ayarlıyoruz
+   180→  const adhanDate = new Date(Date.UTC(year, month, day, 12, 0, 0));
+   181→
+   182→  // Adhan hesaplama
+   183→  const adhanTimes = new AdhanPrayerTimes(coords, adhanDate, params);
+   184→
+   185→  // Adhan UTC tarihlerini hedef saat dilimine çevir
+   186→  // Adhan kütüphanesi UTC Date nesneleri döndürür.
+   187→  // location.timezone offset (saat cinsinden) kullanarak yerel saate çeviririz.
+   188→  const tzOffset = location.timezone; // saat cinsinden (örn: 3 for UTC+3)
+   189→
+   190→  // UTC saati + timezone offset = yerel saat, sonra Date.UTC ile doğru timestamp oluştur
+   191→  const toLocalTime = (utcDate: Date): Date => {
+   192→    const utcHours = utcDate.getUTCHours();
+   193→    const utcMinutes = utcDate.getUTCMinutes();
+   194→    // UTC dakikalarını hesapla + timezone offset (dakika cinsinden)
+   195→    const totalLocalMinutes = (utcHours * 60 + utcMinutes) + (tzOffset * 60);
+   196→    const localHours = Math.floor(totalLocalMinutes / 60) % 24;
+   197→    const localMinutes = totalLocalMinutes % 60;
+   198→    const adjustedHours = localHours < 0 ? localHours + 24 : localHours;
+   199→    // Doğru UTC timestamp: yerel saat - timezone = UTC
+   200→    return new Date(Date.UTC(year, month, day, adjustedHours - tzOffset, localMinutes, 0));
+   201→  };
+   202→
+   203→  const times: PrayerTimes = {
+   204→    seher: new Date(Date.UTC(year, month, day, 0 - tzOffset, 0, 0)),       // Kullanılmayacak
+   205→    imsak: toLocalTime(adhanTimes.fajr),
+   206→    gunes: toLocalTime(adhanTimes.sunrise),
+   207→    ogle: toLocalTime(adhanTimes.dhuhr),
+   208→    ikindi: toLocalTime(adhanTimes.asr),
+   209→    aksam: toLocalTime(adhanTimes.maghrib),
+   210→    yatsi: toLocalTime(adhanTimes.isha),
+   211→    yatsiSonu: new Date(Date.UTC(year, month, day, 0 - tzOffset, 0, 0)),   // Kullanılmayacak
+   212→  };
+   213→
+   214→  return {
+   215→    times,
+   216→    isHighLatitude: false, // Adhan kendi yüksek enlem kurallarını uygular
+   217→    mizanApplied: false,
+   218→    declination: 0,
+   219→    eqt: 0,
+   220→    method,
+   221→  };
+   222→}
+   223→
+   224→// ────────────────────────────────────────────────────────────
+   225→// Yardımcı Fonksiyonlar
+   226→// ────────────────────────────────────────────────────────────
+   227→
+   228→const DEG2RAD = Math.PI / 180;
+   229→const RAD2DEG = 180 / Math.PI;
+   230→
+   231→function sin(d: number): number {
+   232→  return Math.sin(d * DEG2RAD);
+   233→}
+   234→
+   235→function cos(d: number): number {
+   236→  return Math.cos(d * DEG2RAD);
+   237→}
+   238→
+   239→function tan(d: number): number {
+   240→  return Math.tan(d * DEG2RAD);
+   241→}
+   242→
+   243→function arcsin(x: number): number {
+   244→  return Math.asin(x) * RAD2DEG;
+   245→}
+   246→
+   247→function arccos(x: number): number {
+   248→  return Math.acos(Math.max(-1, Math.min(1, x))) * RAD2DEG;
+   249→}
+   250→
+   251→function arctan2(y: number, x: number): number {
+   252→  return Math.atan2(y, x) * RAD2DEG;
+   253→}
+   254→
+   255→function arctan(x: number): number {
+   256→  return Math.atan(x) * RAD2DEG;
+   257→}
+   258→
+   259→function fixAngle(a: number): number {
+   260→  a = a % 360;
+   261→  return a < 0 ? a + 360 : a;
+   262→}
+   263→
+   264→function fixHour(h: number): number {
+   265→  h = h % 24;
+   266→  return h < 0 ? h + 24 : h;
+   267→}
+   268→
+   269→// ────────────────────────────────────────────────────────────
+   270→// Astronomik Hesaplamalar (USNO Algoritması)
+   271→// ────────────────────────────────────────────────────────────
+   272→
+   273→/**
+   274→ * Jülyen Gün Sayısı (Julian Day Number) hesaplama
+   275→ */
+   276→function julianDay(year: number, month: number, day: number): number {
+   277→  if (month <= 2) {
+   278→    year -= 1;
+   279→    month += 12;
+   280→  }
+   281→  const A = Math.floor(year / 100);
+   282→  const B = 2 - A + Math.floor(A / 4);
+   283→  return Math.floor(365.25 * (year + 4716)) +
+   284→         Math.floor(30.6001 * (month + 1)) +
+   285→         day + B - 1524.5;
+   286→}
+   287→
+   288→/**
+   289→ * J2000.0'dan itibaren geçen yüzyıl sayısı
+   290→ */
+   291→function julianCentury(jd: number): number {
+   292→  return (jd - 2451545.0) / 36525.0;
+   293→}
+   294→
+   295→/**
+   296→ * Güneş'in ortalama boylamı (derece)
+   297→ */
+   298→function sunMeanLongitude(T: number): number {
+   299→  return fixAngle(280.46645 + 36000.76983 * T + 0.0003032 * T * T);
+   300→}
+   301→
+   302→/**
+   303→ * Güneş'in ortalama anomalisi (derece)
+   304→ */
+   305→function sunMeanAnomaly(T: number): number {
+   306→  return fixAngle(357.5291 + 35999.0503 * T - 0.0001559 * T * T - 0.00000048 * T * T * T);
+   307→}
+   308→
+   309→/**
+   310→ * Dünya'nın yörünge eksantrikliği
+   311→ */
+   312→function earthEccentricity(T: number): number {
+   313→  return 0.016708617 - 0.000042037 * T - 0.0000001236 * T * T;
+   314→}
+   315→
+   316→/**
+   317→ * Güneş'in denklem merkezi (Equation of Center)
+   318→ */
+   319→function sunEquationOfCenter(T: number, M: number): number {
+   320→  const Mrad = M * DEG2RAD;
+   321→  const C = (1.914602 - 0.004817 * T - 0.000014 * T * T) * Math.sin(Mrad) +
+   322→            (0.019993 - 0.000101 * T) * Math.sin(2 * Mrad) +
+   323→            0.000289 * Math.sin(3 * Mrad);
+   324→  return C;
+   325→}
+   326→
+   327→/**
+   328→ * Güneş'in gerçek boylamı (True Longitude)
+   329→ */
+   330→function sunTrueLongitude(T: number): number {
+   331→  const L0 = sunMeanLongitude(T);
+   332→  const M = sunMeanAnomaly(T);
+   333→  const C = sunEquationOfCenter(T, M);
+   334→  return fixAngle(L0 + C);
+   335→}
+   336→
+   337→/**
+   338→ * Güneş'in görünen boylamı (Apparent Longitude)
+   339→ */
+   340→function sunApparentLongitude(T: number): number {
+   341→  const O = sunTrueLongitude(T);
+   342→  const omega = 125.04 - 1934.136 * T;
+   343→  return O - 0.00569 - 0.00478 * Math.sin(omega * DEG2RAD);
+   344→}
+   345→
+   346→/**
+   347→ * Ekliptik oblik (Ecliptic Obliquity / Eğiklik)
+   348→ * ε = 23.439° - 0.00000036° × d
+   349→ */
+   350→function meanObliquity(T: number): number {
+   351→  const seconds = 21.448 - T * (46.815 + T * (0.00059 - T * 0.001813));
+   352→  return 23.0 + (26.0 + seconds / 60.0) / 60.0;
+   353→}
+   354→
+   355→function obliquityCorrection(T: number): number {
+   356→  const e0 = meanObliquity(T);
+   357→  const omega = 125.04 - 1934.136 * T;
+   358→  return e0 + 0.00256 * Math.cos(omega * DEG2RAD);
+   359→}
+   360→
+   361→/**
+   362→ * Güneş'in saat açısı için dik açıklık (Right Ascension)
+   363→ */
+   364→function sunRightAscension(T: number): number {
+   365→  const e = obliquityCorrection(T);
+   366→  const lambda = sunApparentLongitude(T);
+   367→  const tananum = cos(e) * Math.sin(lambda * DEG2RAD);
+   368→  const tanadenom = Math.cos(lambda * DEG2RAD);
+   369→  return arctan2(tananum, tanadenom);
+   370→}
+   371→
+   372→/**
+   373→ * Güneş'in dik açıklığı (Solar Declination / δ)
+   374→ * δ = arcsin(sin(ε) × sin(λ))
+   375→ */
+   376→function solarDeclination(T: number): number {
+   377→  const e = obliquityCorrection(T);
+   378→  const lambda = sunApparentLongitude(T);
+   379→  return arcsin(sin(e) * Math.sin(lambda * DEG2RAD));
+   380→}
+   381→
+   382→/**
+   383→ * Zaman Denklemi (Equation of Time)
+   384→ * EqT = q/15 - RA (saat cinsinden)
+   385→ * 
+   386→ * q: Güneş'in ortalama boylamının J2000'den farkı (derece → saat)
+   387→ * RA: Saat açısı dik açıklık (derece → saat)
+   388→ */
+   389→function equationOfTime(T: number): number {
+   390→  const epsilon = obliquityCorrection(T);
+   391→  const L0 = sunMeanLongitude(T);
+   392→  const e = earthEccentricity(T);
+   393→  const M = sunMeanAnomaly(T);
+   394→
+   395→  const y = Math.tan(epsilon * DEG2RAD / 2);
+   396→  const y2 = y * y;
+   397→
+   398→  const sin2L0 = Math.sin(2 * L0 * DEG2RAD);
+   399→  const sinM = Math.sin(M * DEG2RAD);
+   400→  const cos2L0 = Math.cos(2 * L0 * DEG2RAD);
+   401→  const sin2M = Math.sin(2 * M * DEG2RAD);
+   402→  const cosM = Math.cos(M * DEG2RAD);
+   403→
+   404→  const Etime = y2 * sin2L0 -
+   405→                2 * e * sinM +
+   406→                4 * e * y * sinM * cos2L0 -
+   407→                0.5 * y2 * sin2M -
+   408→                1.25 * e * e * sin2M;
+   409→
+   410→  // Derece cinsinden → saat cinsine çevir (1/15)
+   411→  return Etime * 4.0 / 60.0; // Dakika cinsinden
+   412→}
+   413→
+   414→/**
+   415→ * Daha basit ve doğru EqT hesaplama (USNO tabanlı)
+   416→ */
+   417→function equationOfTimeAlt(T: number): number {
+   418→  const L0 = sunMeanLongitude(T);
+   419→  const M = sunMeanAnomaly(T);
+   420→  const e = earthEccentricity(T);
+   421→  const epsilon = obliquityCorrection(T);
+   422→
+   423→  // Güneşin gerçek boylamı
+   424→  const C = sunEquationOfCenter(T, M);
+   425→  const sunTrueLong = L0 + C;
+   426→
+   427→  // Saat açısı (Right Ascension)
+   428→  const RA = arctan2(cos(epsilon) * Math.sin(sunTrueLong * DEG2RAD), Math.cos(sunTrueLong * DEG2RAD));
+   429→
+   430→  // EqT = (L0 - RA) olarak hesapla, saat cinsine çevir
+   431→  let eqt = (L0 - RA) / 15.0;
+   432→
+   433→  // 0-24 aralığına getir
+   434→  if (eqt > 12) eqt -= 24;
+   435→  if (eqt < -12) eqt += 24;
+   436→
+   437→  return eqt; // Saat cinsinden
+   438→}
+   439→
+   440→// ────────────────────────────────────────────────────────────
+   441→// Temel Vakit Hesaplama Fonksiyonları
+   442→// ────────────────────────────────────────────────────────────
+   443→
+   444→/**
+   445→ * Saat Açısı (Hour Angle) fonksiyonu
+   446→ * T(α) = (1/15) × arccos[(sin(α) - sin(φ) × sin(δ)) / (cos(φ) × cos(δ))]
+   447→ * 
+   448→ * Standart astronomik konvansiyon: α güneş yükseklik açısıdır.
+   449→ * α > 0: ufuk üstü, α < 0: ufuk altı (depression angle)
+   450→ * 
+   451→ * @param alpha - Güneş yükseklik açısı (derece, negatif = ufuk altı)
+   452→ * @param latitude - Enlem (derece)
+   453→ * @param declination - Güneş dik açıklığı (derece)
+   454→ * @returns Saat açısı (saat cinsinden)
+   455→ */
+   456→function hourAngle(alpha: number, latitude: number, declination: number): number {
+   457→  const cosH = (sin(alpha) - sin(latitude) * sin(declination)) /
+   458→               (cos(latitude) * cos(declination));
+   459→
+   460→  // Beyaz geceler: Güneş bu açıya inmiyor
+   461→  if (cosH > 1) return NaN;  // Güneş hiç batmıyor
+   462→  if (cosH < -1) return NaN; // Güneş hiç doğmuyor
+   463→
+   464→  return (1 / 15) * arccos(cosH);
+   465→}
+   466→
+   467→/**
+   468→ * Asr Gölge Formülü
+   469→ * A(t) = (1/15) × arccos[(sin(arctan(1/(t + tan(|φ - δ|)))) - sin(φ) × sin(δ)) / (cos(φ) × cos(δ))]
+   470→ * 
+   471→ * @param shadowFactor - Gölge çarpanı (1 = Asr-ı Evvel, 2 = Asr-ı Sani)
+   472→ * @param latitude - Enlem (derece)
+   473→ * @param declination - Güneş dik açıklığı (derece)
+   474→ * @returns İkindi için saat açısı (saat cinsinden)
+   475→ */
+   476→function asrHourAngle(shadowFactor: number, latitude: number, declination: number): number {
+   477→  const phi = latitude;
+   478→  const delta = declination;
+   479→
+   480→  // Gölge açısı: arctan(1 / (t + tan(|φ - δ|)))
+   481→  const angle = arctan(1 / (shadowFactor + Math.abs(tan(phi - delta))));
+   482→
+   483→  const cosH = (sin(angle) - sin(phi) * sin(delta)) /
+   484→               (cos(phi) * cos(delta));
+   485→
+   486→  if (cosH > 1 || cosH < -1) return NaN;
+   487→
+   488→  return (1 / 15) * arccos(cosH);
+   489→}
+   490→
+   491→/**
+   492→ * Öğle vakti (Zeval / Dhuhr) hesaplama
+   493→ * Dhuhr = 12 + TimeZone - L/15 - EqT
+   494→ */
+   495→function dhuhrTime(longitude: number, timezone: number, eqt: number): number {
+   496→  return 12 + timezone - longitude / 15 - eqt;
+   497→}
+   498→
+   499→// ────────────────────────────────────────────────────────────
+   500→// MİZAN KURALI (Yüksek Enlem Algoritması)
+   501→// ────────────────────────────────────────────────────────────
+   502→
+   503→/**
+   504→ * Mizan Kuralı: Geceyi üçe bölen fıkhî yöntem
+   505→ * 
+   506→ * T_gece = T_güneş_doğuşu - T_aksam_vakti
+   507→ * 
+   508→ * P1 = Akşamdan Yatsı sonuna kadar (1/3 gece veya hesaplanan)
+   509→ * P2 = Uyku/Teheccüd (en uzun bölüm, > P1)
+   510→ * P3 = İmsaktan Güneşe kadar (P1'e eşit)
+   511→ * 
+   512→ * Koşul: P1 = P3 ve P2 > P1
+   513→ */
+   514→function applyMizanRule(
+   515→  aksamHour: number,
+   516→  gunesHour: number,
+   517→  imsakHour: number,
+   518→  yatsiHour: number
+   519→): { yatsiHour: number; yatsiSonuHour: number; imsakHour: number } {
+   520→  // Gece süresi (saat cinsinden)
+   521→  // Güneş batışından ertesi gün doğuşuna kadar
+   522→  let nightDuration: number;
+   523→  
+   524→  if (gunesHour < aksamHour) {
+   525→    // Güneş doğuşu ertesi günde
+   526→    nightDuration = (24 - aksamHour) + gunesHour;
+   527→  } else {
+   528→    nightDuration = gunesHour - aksamHour;
+   529→  }
+   530→
+   531→  // Mizan kuralı: Geceyi üçe böl
+   532→  // P1 = Akşam → Yatsı sonu = gece/3
+   533→  // P2 = Yatsı sonu → İmsak = gece/3 (en uzun uyku bölümü)
+   534→  // P3 = İmsak → Güneş doğuşu = gece/3
+   535→  // 
+   536→  // Daha doğru Mizan yaklaşımı:
+   537→  // P1 (Akşam→Yatsı) = 1/7 gece
+   538→  // P2 (Yatsı sonu→İmsak) = 4/7 gece (uyku/teheccüd, en uzun)
+   539→  // P3 (İmsak→Güneş) = 2/7 gece
+   540→  // 
+   541→  // Süleymaniye Vakfı Mîzan: P1 = P3 ve P2 > P1
+   542→  // En basit yorum: gece/3 + gece/3 + gece/3 = gece, P2 = gece/3
+   543→  // AMA P2 > P1 olmalı → P2 = gece/2, P1 = P3 = gece/4
+   544→  // Bu durumda: gece/4 + gece/2 + gece/4 = gece ✓, P2 > P1 ✓
+   545→  
+   546→  const p1 = nightDuration / 4; // Akşam → Yatsı sonu
+   547→  const p2 = nightDuration / 2; // Yatsı sonu → İmsak (uyku/teheccüd)
+   548→  const p3 = nightDuration / 4; // İmsak → Güneş doğuşu
+   549→
+   550→  const newYatsiSonu = fixHour(aksamHour + p1);
+   551→  const newImsak = fixHour(gunesHour - p3);
+   552→  const newYatsi = fixHour(aksamHour + nightDuration / 6); // Yatsı: Akşam + gece/6
+   553→
+   554→  return {
+   555→    yatsiHour: isFinite(newYatsi) ? newYatsi : aksamHour + 1.5,
+   556→    yatsiSonuHour: isFinite(newYatsiSonu) ? newYatsiSonu : aksamHour + nightDuration / 4,
+   557→    imsakHour: isFinite(newImsak) ? newImsak : gunesHour - nightDuration / 4,
+   558→  };
+   559→}
+   560→
+   561→// ────────────────────────────────────────────────────────────
+   562→// ANA HESAPLAMA SINIFI
+   563→// ────────────────────────────────────────────────────────────
+   564→
+   565→export class SuleymaniyePrayerCalculator {
+   566→  private config: CalculatorConfig;
+   567→  private _asrMadhab: 'standard' | 'hanafi';
+   568→
+   569→  constructor(config: Partial<CalculatorConfig> = {}, asrMadhab: 'standard' | 'hanafi' = 'standard') {
+   570→    this.config = { ...DEFAULT_CONFIG, ...config };
+   571→    this._asrMadhab = asrMadhab;
+   572→  }
+   573→
+   574→  /**
+   575→   * Belirli bir tarih ve konum için namaz vakitlerini hesaplar
+   576→   * Süleymaniye Vakfı: Özel Mîzan hesaplaması
+   577→   * Diğer yöntemler: Adhan kütüphanesi
+   578→   */
+   579→  calculate(date: Date, location: Location): PrayerTimeResult {
+   580→    const method = this.config.method;
+   581→
+   582→    // Süleymaniye Vakfı dışındaki yöntemler Adhan kütüphanesi ile hesaplanır
+   583→    if (method !== 'suleymaniye') {
+   584→      return calculateWithAdhan(date, location, method, this._asrMadhab);
+   585→    }
+   586→
+   587→    // ── Süleymaniye Vakfı Mîzan Hesaplaması ──
+   588→    // Kullanıcının yerel tarihini hesapla (sunucu saat diliminden bağımsız)
+   589→    const utcMs = date.getTime();
+   590→    const userLocalMs = utcMs + location.timezone * 3600000;
+   591→    const userLocalDate = new Date(userLocalMs);
+   592→
+   593→    // Julian Day: kullanıcının yerel tarihi + öğle vakti (0.5 gün)
+   594→    // Bu, gece yarisi geçiş durumlarında (UTC'de farklı tarih) doğru günü verir
+   595→    const jd = julianDay(
+   596→      userLocalDate.getUTCFullYear(),
+   597→      userLocalDate.getUTCMonth() + 1,
+   598→      userLocalDate.getUTCDate() + 0.5  // Yerel öğle vakti
+   599→    );
+   600→
+   601→    const T = julianCentury(jd);
+   602→
+   603→    // Astronomik parametreler
+   604→    const delta = solarDeclination(T);   // Güneş dik açıklığı (δ)
+   605→    const eqt = equationOfTimeAlt(T);     // Zaman denklemi (saat)
+   606→
+   607→    const phi = location.latitude;
+   608→    const L = location.longitude;
+   609→    const tz = location.timezone;
+   610→
+   611→    // ── Öğle (Zeval / Dhuhr) ──
+   612→    const dhuhr = dhuhrTime(L, tz, eqt);
+   613→
+   614→    // ── Saat Açısı Hesaplamaları ──
+   615→
+   616→    // Seher Vakti (Fecr-i Kâzib): -18°
+   617→    const T_seher = hourAngle(this.config.seherAngle, phi, delta);
+   618→
+   619→    // İmsak (Fecr-i Sâdık / Fajr): yönteme göre farklı açılar
+   620→    const T_imsak = hourAngle(this.config.imsakAngle, phi, delta);
+   621→
+   622→    // Güneş Doğuşu: -0.833°
+   623→    const T_gunes = hourAngle(-this.config.gunesRefraction, phi, delta);
+   624→
+   625→    // Akşam (Güneş Batışı): -0.833°
+   626→    const T_aksam = T_gunes; // Simetrik
+   627→
+   628→    // Yatsı: yönteme göre farklı açılar
+   629→    const T_yatsi = hourAngle(this.config.yatsiAngle, phi, delta);
+   630→
+   631→    // İkindi (Asr Gölge Formülü)
+   632→    const shadowFactor = this.config.asrType === 'evvel' ? 1 : 2;
+   633→    const A_asr = asrHourAngle(shadowFactor, phi, delta);
+   634→
+   635→    // ── Vakit Hesaplamaları ──
+   636→
+   637→    let seherHour = fixHour(dhuhr - T_seher);
+   638→    let imsakHour = fixHour(dhuhr - T_imsak);
+   639→    let gunesHour = fixHour(dhuhr - T_gunes);
+   640→    let ogleHour = fixHour(dhuhr);
+   641→    let ikindiHour = fixHour(dhuhr + A_asr);
+   642→    let aksamHour = fixHour(dhuhr + T_aksam);
+   643→    let yatsiHour = fixHour(dhuhr + T_yatsi);
+   644→
+   645→    // ── Yatsı Sonu (sadece Süleymaniye) ──
+   646→    const T_yatsiSonu = hourAngle(this.config.seherAngle, phi, delta);
+   647→
+   648→    let yatsiSonuHour: number;
+   649→    let isHighLatitude = false;
+   650→    let mizanApplied = false;
+   651→
+   652→    // Yüksek enlem kontrolü (sadece SV için bu kod yolu)
+   653→    if (isNaN(T_imsak) || isNaN(T_yatsi) || isNaN(T_seher)) {
+   654→      isHighLatitude = true;
+   655→      mizanApplied = true;
+   656→      const mizan = applyMizanRule(aksamHour, gunesHour, imsakHour, yatsiHour);
+   657→
+   658→      yatsiHour = mizan.yatsiHour;
+   659→      yatsiSonuHour = mizan.yatsiSonuHour;
+   660→      imsakHour = mizan.imsakHour;
+   661→      seherHour = fixHour(imsakHour - 1);
+   662→
+   663→      if (isNaN(T_imsak)) imsakHour = mizan.imsakHour;
+   664→      if (isNaN(T_seher)) seherHour = fixHour(imsakHour - 1);
+   665→    } else if (isNaN(T_yatsiSonu)) {
+   666→      let nightDuration: number;
+   667→      if (gunesHour < aksamHour) {
+   668→        nightDuration = (24 - aksamHour) + gunesHour;
+   669→      } else {
+   670→        nightDuration = gunesHour - aksamHour;
+   671→      }
+   672→      const aksamToYatsi = yatsiHour - aksamHour;
+   673→      const imsakToSeher = imsakHour - seherHour;
+   674→      yatsiSonuHour = fixHour(aksamHour + aksamToYatsi + imsakToSeher * 0.7);
+   675→    } else {
+   676→      yatsiSonuHour = fixHour(dhuhr + T_yatsiSonu);
+   677→    }
+   678→
+   679→    // ── Date Nesnelerine Dönüştür ──
+   680→    const times = this.hoursToDate(date, {
+   681→      seher: seherHour,
+   682→      imsak: imsakHour,
+   683→      gunes: gunesHour,
+   684→      ogle: ogleHour,
+   685→      ikindi: ikindiHour,
+   686→      aksam: aksamHour,
+   687→      yatsi: yatsiHour,
+   688→      yatsiSonu: yatsiSonuHour,
+   689→    }, location.timezone);
+   690→
+   691→    return {
+   692→      times,
+   693→      isHighLatitude,
+   694→      mizanApplied,
+   695→      declination: delta,
+   696→      eqt: eqt * 60,
+   697→      method,
+   698→    };
+   699→  }
+   700→
+   701→  /**
+   702→   * Saat cinsinden değerleri Date nesnelerine dönüştürür
+   703→   *
+   704→   * Timezone-aware: Kullanıcının saat dilimi offset'ini kullanarak
+   705→   * doğru UTC timestamp'li Date nesneleri oluşturur.
+   706→   * Bu, sunucu ve istemci saat dilimi farkından kaynaklanan kaymaları önler.
+   707→   *
+   708→   * Örnek: Öğle 12:07 UTC+3 → Date.UTC(year, month, day, 12-3, 7, 0) = 09:07 UTC
+   709→   */
+   710→  private hoursToDate(baseDate: Date, hours: Record<string, number>, timezone: number): PrayerTimes {
+   711→    const result: Partial<PrayerTimes> = {};
+   712→
+   713→    // Kullanıcının yerel tarihini UTC + timezone offset ile hesapla
+   714→    // Bu, sunucu saat diliminden bağımsız olarak doğru tarihi verir
+   715→    const utcMs = baseDate.getTime();
+   716→    const userLocalMs = utcMs + timezone * 3600000;
+   717→    const userLocalDate = new Date(userLocalMs);
+   718→    const year = userLocalDate.getUTCFullYear();
+   719→    const month = userLocalDate.getUTCMonth();
+   720→    const day = userLocalDate.getUTCDate();
+   721→
+   722→    for (const [key, hour] of Object.entries(hours)) {
+   723→      // "Son" vakitleri (güneş doğuşu, yatsı sonu) geriye yuvarla:
+   724→      // Bu vakitler bir vaktin bitişi olduğundan, erken bitirme temkini uygulanır.
+   725→      // Diğer tüm vakitler ileriye yuvarlanır (geç başlama temkini).
+   726→      const isEndTime = key === 'gunes' || key === 'yatsiSonu';
+   727→      const totalMinutes = hour * 60;
+   728→      const roundedMinutes = isEndTime ? Math.floor(totalMinutes) : Math.ceil(totalMinutes);
+   729→      const h = Math.floor(roundedMinutes / 60);
+   730→      const m = roundedMinutes % 60;
+   731→      // Yerel saat h:m, timezone offset ile UTC'ye çevir
+   732→      // Öğle 12:07 UTC+3 → Date.UTC(year, month, day, 12-3, 7, 0) = 09:07 UTC
+   733→      result[key as keyof PrayerTimes] = new Date(Date.UTC(year, month, day, h - timezone, m, 0));
+   734→    }
+   735→
+   736→    return result as PrayerTimes;
+   737→  }
+   738→
+   739→  /**
+   740→   * Ayarları günceller
+   741→   */
+   742→  updateConfig(config: Partial<CalculatorConfig>, asrMadhab?: 'standard' | 'hanafi'): void {
+   743→    this.config = { ...this.config, ...config };
+   744→    if (asrMadhab !== undefined) {
+   745→      this._asrMadhab = asrMadhab;
+   746→    }
+   747→  }
+   748→
+   749→  getConfig(): CalculatorConfig {
+   750→    return { ...this.config };
+   751→  }
+   752→}
+   753→
+   754→// ────────────────────────────────────────────────────────────
+   755→// HİCRİ TARİH DÖNÜŞÜMÜ (Yaklaşık)
+   756→// ────────────────────────────────────────────────────────────
+   757→
+   758→export interface HijriDate {
+   759→  year: number;
+   760→  month: number;
+   761→  day: number;
+   762→  monthName: string;
+   763→}
+   764→
+   765→const HIJRI_MONTHS = [
+   766→  'Muharrem', 'Safer', 'Rebiülevvel', 'Rebiülâhir',
+   767→  'Rumusâni', 'Cemaziyelevvel', 'Cemaziyelâhir', 'Recep',
+   768→  'Şaban', 'Ramazan', 'Şevval', 'Zilkade', 'Zilhicce'
+   769→];
+   770→
+   771→/**
+   772→ * Miladi → Hicri tarih dönüşümü (Kuwaiti algoritması, yaklaşık)
+   773→ */
+   774→export function gregorianToHijri(date: Date): HijriDate {
+   775→  const gd = date.getDate();
+   776→  const gm = date.getMonth() + 1;
+   777→  const gy = date.getFullYear();
+   778→
+   779→  if (gy < 1583) {
+   780→    throw new Error('Bu algoritma 1583 sonrası için geçerlidir');
+   781→  }
+   782→
+   783→  let d = gd;
+   784→  let m = gm;
+   785→  let y = gy;
+   786→
+   787→  if (m < 3) {
+   788→    y -= 1;
+   789→    m += 12;
+   790→  }
+   791→
+   792→  const a = Math.floor(y / 100);
+   793→  const b = 2 - a + Math.floor(a / 4);
+   794→
+   795→  const jd = Math.floor(365.25 * (y + 4716)) +
+   796→             Math.floor(30.6001 * (m + 1)) +
+   797→             d + b - 1524.5;
+   798→
+   799→  // Hicri hesaplama
+   800→  const l = Math.floor(jd - 1948439.5 + 10632);
+   801→  const n = Math.floor((l - 1) / 10631);
+   802→  const l2 = l - 10631 * n + 354;
+   803→  const j = Math.floor((10985 - l2) / 5316) * Math.floor((50 * l2) / 17719) +
+   804→            Math.floor(l2 / 5670) * Math.floor((43 * l2) / 15238);
+   805→  const l3 = l2 - Math.floor((30 - j) / 15) * Math.floor((17719 * j) / 50) -
+   806→             Math.floor(j / 16) * Math.floor((15238 * j) / 43) + 29;
+   807→  const mH = Math.floor((24 * l3) / 709);
+   808→  const dH = l3 - Math.floor((709 * mH) / 24);
+   809→  const yH = 30 * n + j - 30;
+   810→
+   811→  return {
+   812→    year: yH,
+   813→    month: mH,
+   814→    day: dH,
+   815→    monthName: HIJRI_MONTHS[mH - 1] || '',
+   816→  };
+   817→}
+   818→
+   819→// ────────────────────────────────────────────────────────────
+   820→// VAKİT BİLGİ YARDIMCILARI
+   821→// ────────────────────────────────────────────────────────────
+   822→
+   823→export interface PrayerInfo {
+   824→  key: keyof PrayerTimes;
+   825→  label: string;
+   826→  icon: string;
+   827→}
+   828→
+   829→// Süleymaniye Vakfı: 8 vakit
+   830→export const PRAYER_ORDER_SV: PrayerInfo[] = [
+   831→  { key: 'seher', label: 'Seher Vakti', icon: '🌙' },
+   832→  { key: 'imsak', label: 'Sabah Namazı', icon: '🌅' },
+   833→  { key: 'gunes', label: 'Sabah Namazı Sonu', icon: '☀️' },
+   834→  { key: 'ogle', label: 'Öğle', icon: '🌤️' },
+   835→  { key: 'ikindi', label: 'İkindi', icon: '⛅' },
+   836→  { key: 'aksam', label: 'Akşam', icon: '🌅' },
+   837→  { key: 'yatsi', label: 'Yatsı', icon: '🌃' },
+   838→  { key: 'yatsiSonu', label: 'Yatsı Sonu', icon: '🕐' },
+   839→];
+   840→
+   841→// Diğer yöntemler: 6 vakit
+   842→export const PRAYER_ORDER_STANDARD: PrayerInfo[] = [
+   843→  { key: 'imsak', label: 'İmsak', icon: '🌅' },
+   844→  { key: 'gunes', label: 'Güneş', icon: '☀️' },
+   845→  { key: 'ogle', label: 'Öğle', icon: '🌤️' },
+   846→  { key: 'ikindi', label: 'İkindi', icon: '⛅' },
+   847→  { key: 'aksam', label: 'Akşam', icon: '🌅' },
+   848→  { key: 'yatsi', label: 'Yatsı', icon: '🌃' },
+   849→];
+   850→
+   851→/** Geriye uyumluluk için */
+   852→export const PRAYER_ORDER = PRAYER_ORDER_SV;
+   853→
+   854→export function getPrayerOrder(method: CalculationMethod): PrayerInfo[] {
+   855→  return method === 'suleymaniye' ? PRAYER_ORDER_SV : PRAYER_ORDER_STANDARD;
+   856→}
+   857→
+   858→/**
+   859→ * Şu anki aktif vakti ve sıradaki vakti bulur
+   860→ */
+   861→export function getActivePrayer(
+   862→  times: PrayerTimes,
+   863→  now: Date,
+   864→  method: CalculationMethod = 'suleymaniye'
+   865→): { active: PrayerInfo; next: PrayerInfo; timeUntilNext: number } | null {
+   866→  const order = getPrayerOrder(method);
+   867→  const keys = order.map(p => p.key);
+   868→
+   869→  for (let i = keys.length - 1; i >= 0; i--) {
+   870→    const currentTime = times[keys[i]];
+   871→    if (now >= currentTime) {
+   872→      const active = order[i];
+   873→      const nextIndex = (i + 1) % order.length;
+   874→      const next = order[nextIndex];
+   875→      // Gece yarısını geçen vakit (ertesi gün) için hesaplama
+   876→      let nextTime = times[keys[nextIndex]];
+   877→      if (nextIndex === 0) {
+   878→        // İlk vaktin ertesi gün olduğunu varsay
+   879→        nextTime = new Date(nextTime.getTime() + 24 * 60 * 60 * 1000);
+   880→      }
+   881→      const timeUntilNext = nextTime.getTime() - now.getTime();
+   882→      return { active, next, timeUntilNext };
+   883→    }
+   884→  }
+   885→
+   886→  // Şu an ilk vakitten önce
+   887→  const active = order[order.length - 1];
+   888→  const next = order[0];
+   889→  return {
+   890→    active,
+   891→    next,
+   892→    timeUntilNext: times[keys[0]].getTime() - now.getTime(),
+   893→  };
+   894→}
+   895→
+   896→/**
+   897→ * Saat formatla (HH:MM)
+   898→ */
+   899→export function formatTime(date: Date): string {
+   900→  const h = date.getHours().toString().padStart(2, '0');
+   901→  const m = date.getMinutes().toString().padStart(2, '0');
+   902→  return `${h}:${m}`;
+   903→}
+   904→
+   905→/**
+   906→ * Geri sayım formatla (HH:MM:SS)
+   907→ */
+   908→export function formatCountdown(ms: number): string {
+   909→  if (ms <= 0) return '00:00:00';
+   910→  const totalSeconds = Math.floor(ms / 1000);
+   911→  const hours = Math.floor(totalSeconds / 3600);
+   912→  const minutes = Math.floor((totalSeconds % 3600) / 60);
+   913→  const seconds = totalSeconds % 60;
+   914→  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+   915→}
+   916→
