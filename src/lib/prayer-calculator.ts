@@ -932,6 +932,25 @@ export function formatTime(date: Date): string {
 }
 
 /**
+ * Timezone-aware saat formatla (HH:MM)
+ * Sunucu tarafında kullanılır — Date objesi UTC'de saklandığı için
+ * getHours() server timezone'ını kullanır, bu da yanlış sonuç verir.
+ * Bu fonksiyon timezone offset'ini manuel olarak uygular.
+ *
+ * @param date UTC tabanlı Date objesi
+ * @param timezone Saat dilimi offset'i (ör: UTC+3 için 3)
+ */
+export function formatTimeForTimezone(date: Date, timezone: number): string {
+  // UTC saatini al ve timezone offset'ini ekle
+  const utcMs = date.getTime();
+  const localMs = utcMs + timezone * 3600000;
+  const localDate = new Date(localMs);
+  const h = localDate.getUTCHours().toString().padStart(2, '0');
+  const m = localDate.getUTCMinutes().toString().padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+/**
  * Geri sayım formatla (HH:MM:SS)
  */
 export function formatCountdown(ms: number): string {

@@ -7,6 +7,7 @@ import {
   METHOD_CONFIGS,
   type CalculationMethod,
   formatTime,
+  formatTimeForTimezone,
   getPrayerOrder,
   type PrayerAlarmSetting,
 } from '@/lib/prayer-calculator';
@@ -92,7 +93,7 @@ export async function GET(request: NextRequest) {
             const prayerTime = result.times[p.key];
             const diff = prayerTime.getTime() - now.getTime();
             const diffMin = Math.round(diff / 60000);
-            details.push(`${p.label}: ${formatTime(prayerTime)} (fark: ${diffMin}dk)`);
+            details.push(`${p.label}: ${formatTimeForTimezone(prayerTime, sub.timezone)} (fark: ${diffMin}dk)`);
           }
         }
 
@@ -113,7 +114,7 @@ export async function GET(request: NextRequest) {
               sentKeys.add(notifKey);
               const payload = {
                 title: `${p.label} Vakti`,
-                body: `${p.label} vakti geldi: ${formatTime(prayerTime)}`,
+                body: `${p.label} vakti geldi: ${formatTimeForTimezone(prayerTime, sub.timezone)}`,
                 icon: '/favicon.ico',
                 tag: notifKey,
                 prayerKey: p.key,
