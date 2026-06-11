@@ -895,19 +895,31 @@ export function getActivePrayer(
 
 /**
  * Saat değerine en yakın saat emoji'sini döndürür.
- * Örnek: 22:32 → 🕤 (22:30), 05:15 → 🕔 (05:00)
+ * Yarı saat emojileri de kullanılır: 22:32 → 🕤 (22:30), 05:10 → 🕔 (05:00)
+ * Yuvarlama: 0-14dk → tam saat, 15-44dk → yarı saat, 45-59dk → üst tam saat
  */
 export function getClockEmoji(date: Date): string {
-  // Saat emojileri: 12:00 → 🕛, 1:00 → 🕐, 2:00 → 🕑, ... 11:00 → 🕚
+  // 24 emoji: sırayla 12:00, 12:30, 1:00, 1:30, 2:00, 2:30, ... 11:00, 11:30
   const clockEmojis = [
-    '🕛', '🕐', '🕑', '🕒', '🕓', '🕔',
-    '🕕', '🕖', '🕗', '🕘', '🕙', '🕚',
+    '🕛', '🕧', '🕐', '🕜', '🕑', '🕝',
+    '🕒', '🕞', '🕓', '🕟', '🕔', '🕠',
+    '🕕', '🕡', '🕖', '🕢', '🕗', '🕣',
+    '🕘', '🕤', '🕙', '🕥', '🕚', '🕦',
   ];
-  const h = date.getHours() % 12;
+  const h = date.getHours() % 12; // 0-11 (0 = 12)
   const m = date.getMinutes();
-  // En yakın saate yuvarla (30 dk ve üzeri bir üst saate)
-  const roundedHour = m >= 30 ? (h + 1) % 12 : h;
-  return clockEmojis[roundedHour];
+  let index: number;
+  if (m < 15) {
+    // tam saat
+    index = h * 2;
+  } else if (m < 45) {
+    // yarı saat
+    index = h * 2 + 1;
+  } else {
+    // üst tam saat
+    index = ((h + 1) % 12) * 2;
+  }
+  return clockEmojis[index];
 }
 
 /**
