@@ -166,20 +166,28 @@ function calculateWithAdhan(date: Date, location: Location, method: CalculationM
   // Yuvarlama: yukarı (temkin amaçlı)
   params.rounding = Rounding.Up;
 
-  // Adhan hesaplama
-  const adhanTimes = new AdhanPrayerTimes(coords, date, params);
+  // Kullanıcının yerel tarihini hesapla (sunucu saat diliminden bağımsız)
+  const utcMs = date.getTime();
+  const userLocalMs = utcMs + location.timezone * 3600000;
+  const userLocalDate = new Date(userLocalMs);
+  const year = userLocalDate.getUTCFullYear();
+  const month = userLocalDate.getUTCMonth();
+  const day = userLocalDate.getUTCDate();
 
-  // Sonuçları PrayerTimes formatına dönüştür
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  const day = date.getDate();
+  // Adhan kütüphanesine kullanıcının yerel tarihini ver
+  // Adhan, Date'in yerel metodlarını kullanarak tarihi belirler
+  // Bu yüzden UTC saatini kullanıcının yerel tarihine ayarlıyoruz
+  const adhanDate = new Date(Date.UTC(year, month, day, 12, 0, 0));
+
+  // Adhan hesaplama
+  const adhanTimes = new AdhanPrayerTimes(coords, adhanDate, params);
 
   // Adhan UTC tarihlerini hedef saat dilimine çevir
   // Adhan kütüphanesi UTC Date nesneleri döndürür.
   // location.timezone offset (saat cinsinden) kullanarak yerel saate çeviririz.
   const tzOffset = location.timezone; // saat cinsinden (örn: 3 for UTC+3)
 
-  // UTC saati + timezone offset = yerel saat
+  // UTC saati + timezone offset = yerel saat, sonra Date.UTC ile doğru timestamp oluştur
   const toLocalTime = (utcDate: Date): Date => {
     const utcHours = utcDate.getUTCHours();
     const utcMinutes = utcDate.getUTCMinutes();
@@ -188,18 +196,19 @@ function calculateWithAdhan(date: Date, location: Location, method: CalculationM
     const localHours = Math.floor(totalLocalMinutes / 60) % 24;
     const localMinutes = totalLocalMinutes % 60;
     const adjustedHours = localHours < 0 ? localHours + 24 : localHours;
-    return new Date(year, month, day, adjustedHours, localMinutes, 0);
+    // Doğru UTC timestamp: yerel saat - timezone = UTC
+    return new Date(Date.UTC(year, month, day, adjustedHours - tzOffset, localMinutes, 0));
   };
 
   const times: PrayerTimes = {
-    seher: new Date(year, month, day, 0, 0, 0),       // Kullanılmayacak
+    seher: new Date(Date.UTC(year, month, day, 0 - tzOffset, 0, 0)),       // Kullanılmayacak
     imsak: toLocalTime(adhanTimes.fajr),
     gunes: toLocalTime(adhanTimes.sunrise),
     ogle: toLocalTime(adhanTimes.dhuhr),
     ikindi: toLocalTime(adhanTimes.asr),
     aksam: toLocalTime(adhanTimes.maghrib),
     yatsi: toLocalTime(adhanTimes.isha),
-    yatsiSonu: new Date(year, month, day, 0, 0, 0),   // Kullanılmayacak
+    yatsiSonu: new Date(Date.UTC(year, month, day, 0 - tzOffset, 0, 0)),   // Kullanılmayacak
   };
 
   return {
@@ -576,10 +585,17 @@ export class SuleymaniyePrayerCalculator {
     }
 
     // ── Süleymaniye Vakfı Mîzan Hesaplaması ──
+    // Kullanıcının yerel tarihini hesapla (sunucu saat diliminden bağımsız)
+    const utcMs = date.getTime();
+    const userLocalMs = utcMs + location.timezone * 3600000;
+    const userLocalDate = new Date(userLocalMs);
+
+    // Julian Day: kullanıcının yerel tarihi + öğle vakti (0.5 gün)
+    // Bu, gece yarisi geçiş durumlarında (UTC'de farklı tarih) doğru günü verir
     const jd = julianDay(
-      date.getUTCFullYear(),
-      date.getUTCMonth() + 1,
-      date.getUTCDate() + date.getUTCHours() / 24 + date.getUTCMinutes() / 1440
+      userLocalDate.getUTCFullYear(),
+      userLocalDate.getUTCMonth() + 1,
+      userLocalDate.getUTCDate() + 0.5  // Yerel öğle vakti
     );
 
     const T = julianCentury(jd);
@@ -670,7 +686,7 @@ export class SuleymaniyePrayerCalculator {
       aksam: aksamHour,
       yatsi: yatsiHour,
       yatsiSonu: yatsiSonuHour,
-    });
+    }, location.timezone);
 
     return {
       times,
@@ -684,12 +700,24 @@ export class SuleymaniyePrayerCalculator {
 
   /**
    * Saat cinsinden değerleri Date nesnelerine dönüştürür
+   *
+   * Timezone-aware: Kullanıcının saat dilimi offset'ini kullanarak
+   * doğru UTC timestamp'li Date nesneleri oluşturur.
+   * Bu, sunucu ve istemci saat dilimi farkından kaynaklanan kaymaları önler.
+   *
+   * Örnek: Öğle 12:07 UTC+3 → Date.UTC(year, month, day, 12-3, 7, 0) = 09:07 UTC
    */
-  private hoursToDate(baseDate: Date, hours: Record<string, number>): PrayerTimes {
+  private hoursToDate(baseDate: Date, hours: Record<string, number>, timezone: number): PrayerTimes {
     const result: Partial<PrayerTimes> = {};
-    const year = baseDate.getFullYear();
-    const month = baseDate.getMonth();
-    const day = baseDate.getDate();
+
+    // Kullanıcının yerel tarihini UTC + timezone offset ile hesapla
+    // Bu, sunucu saat diliminden bağımsız olarak doğru tarihi verir
+    const utcMs = baseDate.getTime();
+    const userLocalMs = utcMs + timezone * 3600000;
+    const userLocalDate = new Date(userLocalMs);
+    const year = userLocalDate.getUTCFullYear();
+    const month = userLocalDate.getUTCMonth();
+    const day = userLocalDate.getUTCDate();
 
     for (const [key, hour] of Object.entries(hours)) {
       // "Son" vakitleri (güneş doğuşu, yatsı sonu) geriye yuvarla:
@@ -700,7 +728,9 @@ export class SuleymaniyePrayerCalculator {
       const roundedMinutes = isEndTime ? Math.floor(totalMinutes) : Math.ceil(totalMinutes);
       const h = Math.floor(roundedMinutes / 60);
       const m = roundedMinutes % 60;
-      result[key as keyof PrayerTimes] = new Date(year, month, day, h, m, 0);
+      // Yerel saat h:m, timezone offset ile UTC'ye çevir
+      // Öğle 12:07 UTC+3 → Date.UTC(year, month, day, 12-3, 7, 0) = 09:07 UTC
+      result[key as keyof PrayerTimes] = new Date(Date.UTC(year, month, day, h - timezone, m, 0));
     }
 
     return result as PrayerTimes;

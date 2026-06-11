@@ -40,3 +40,27 @@ Stage Summary:
 - pushSupported hidrasyon düzeltmesi uygulandı (useState + useEffect)
 - Production build ve standalone server başarılı
 - Tüm endpoint'ler test edildi ve çalışıyor
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: Bildirim zaman kayması (drift) problemi düzeltme
+
+Work Log:
+- Kök neden: hoursToDate() ve calculateWithAdhan() fonksiyonları Date nesnelerini
+  new Date(year, month, day, h, m, 0) ile oluşturuyordu — bu JavaScript runtime'ın
+  yerel saat dilimini kullanır. Sunucuda UTC, istemcide UTC+3 → 3 saat kayma
+- hoursToDate() timezone-aware yapıldı: Date.UTC() + timezone offset ile doğru UTC timestamp
+- calculate() JD hesaplaması: kullanıcının yerel tarihi kullanılıyor (UTC + timezone offset)
+- calculateWithAdhan(): kullanıcı yerel tarihi ile Adhan'a tarih veriliyor, Date.UTC ile sonuçlar oluşturuluyor
+- Node.js test ile doğrulama:
+  * ESKI: Ogle 12:07 → 12:07 UTC → 15:07 Istanbul gösterim (3 saat kayma) ✗
+  * YENI: Ogle 12:07 → 09:07 UTC → 12:07 Istanbul gösterim ✓
+  * Scheduler diff: ESKI=10800000ms (3 saat) → YENI=0ms ✓
+- start.sh güncellendi: .env dosyasını standalone dizinine kopyalıyor
+- .env dosyasına VAPID keyler tekrar eklendi (build sırasında siliniyor olabilir)
+
+Stage Summary:
+- Timezone-aware prayer time hesaplama düzeltmesi uygulandı
+- Sunucu-istemci saat dilimi uyuşmazlığı çözüldü
+- Node.js test ile 3 saatlik kayma düzeltmesi doğrulandı
