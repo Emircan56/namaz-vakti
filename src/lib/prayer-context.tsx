@@ -283,6 +283,29 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
     setPushSupported(supported);
   }, []);
 
+  // Push aboneliğini sayfa yüklendiğinde senkronize et (DB kaybını önle)
+  useEffect(() => {
+    if (!pushSupported || !settings.pushEnabled) return;
+    const resyncPush = async () => {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const existingSub = await registration.pushManager.getSubscription();
+        if (existingSub) {
+          pushSubscriptionRef.current = existingSub;
+          // Her sayfa yüklendiğinde aboneliği backend'e tekrar gönder (DB'de yoksa oluşturur)
+          await syncPushSubscription(existingSub, currentLocation, settings);
+          console.log('[Push] Abonelik senkronize edildi');
+        }
+      } catch (err) {
+        console.error('[Push] Abonelik senkronizasyon hatası:', err);
+      }
+    };
+    // Konum yüklendikten sonra senkronize et
+    if (!isLoading && currentLocation.latitude !== 0) {
+      resyncPush();
+    }
+  }, [pushSupported, settings.pushEnabled, isLoading, currentLocation.latitude]);
+
   // ── Service Worker Kaydı ──
   useEffect(() => {
     if (!pushSupported) return;
@@ -574,7 +597,7 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
         const diff = prayerTime.getTime() - now.getTime();
 
         const prayerNotifKey = `prayer-${p.key}-${prayerTime.getTime()}`;
-        if (diff <= 0 && diff > -2000 && !notifiedRef.current.has(prayerNotifKey)) {
+        if (diff <= 0 && diff > -90000 && !notifiedRef.current.has(prayerNotifKey)) {
           notifiedRef.current.add(prayerNotifKey);
           // Service Worker üzerinden göster (daha güvenilir)
           navigator.serviceWorker?.ready.then(reg => {
@@ -598,9 +621,10 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (alarm.preAlarm.enabled && alarm.preAlarm.minutes > 0) {
-          const preAlarmDiff = diff - alarm.preAlarm.minutes * 60 * 1000;
+          const preAlarmTime = prayerTime.getTime() - alarm.preAlarm.minutes * 60 * 1000;
+          const preAlarmDiff = preAlarmTime - now.getTime();
           const preAlarmNotifKey = `prealarm-${p.key}-${prayerTime.getTime()}-${alarm.preAlarm.minutes}`;
-          if (preAlarmDiff <= 0 && preAlarmDiff > -2000 && !notifiedRef.current.has(preAlarmNotifKey)) {
+          if (preAlarmDiff <= 0 && preAlarmDiff > -90000 && !notifiedRef.current.has(preAlarmNotifKey)) {
             notifiedRef.current.add(preAlarmNotifKey);
             navigator.serviceWorker?.ready.then(reg => {
               reg.showNotification(`${p.label} Yaklaşıyor`, {
