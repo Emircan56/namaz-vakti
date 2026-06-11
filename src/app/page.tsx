@@ -40,7 +40,6 @@ import {
   Wifi,
   BellRing,
   BellDot,
-  Palette,
   Check,
 } from 'lucide-react';
 
@@ -209,23 +208,6 @@ function Header({
   onRefresh: () => void;
   error: string | null;
 }) {
-  const { colorTheme, setColorTheme } = useColorTheme();
-  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  // Dış tıklamada menüyü kapat
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setThemeMenuOpen(false);
-      }
-    }
-    if (themeMenuOpen) {
-      document.addEventListener('mousedown', handleClick);
-    }
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [themeMenuOpen]);
-
   return (
     <header className="w-full bg-islamic text-islamic-foreground shadow-lg relative overflow-hidden">
       {/* Dekoratif geometrik desen */}
@@ -244,60 +226,6 @@ function Header({
             </span>
           </div>
           <div className="flex items-center gap-1">
-            {/* Tema Seçici */}
-            <div className="relative" ref={menuRef}>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-islamic-foreground/80 hover:text-islamic-foreground hover:bg-islamic-light/20"
-                onClick={() => setThemeMenuOpen(!themeMenuOpen)}
-                aria-label="Tema seç"
-              >
-                <Palette className="w-4 h-4" />
-              </Button>
-
-              {/* Tema Açılır Menüsü */}
-              {themeMenuOpen && (
-                <div className="absolute right-0 top-full mt-2 z-50 w-56 rounded-xl border border-border bg-popover shadow-xl p-3 space-y-1.5">
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">
-                    Renk Teması
-                  </div>
-                  {COLOR_THEMES.map((t) => (
-                    <button
-                      key={t.key}
-                      className={`
-                        w-full flex items-center gap-3 px-2.5 py-2 rounded-lg text-left
-                        transition-colors duration-150
-                        ${colorTheme === t.key
-                          ? 'bg-islamic/10 text-islamic'
-                          : 'hover:bg-accent text-foreground'
-                        }
-                      `}
-                      onClick={() => {
-                        setColorTheme(t.key);
-                        setThemeMenuOpen(false);
-                      }}
-                    >
-                      {/* Renk önizlemesi */}
-                      <div className={`
-                        w-5 h-5 rounded-full shrink-0 border-2
-                        ${isDark ? t.swatchDark : t.swatch}
-                        ${colorTheme === t.key ? 'border-islamic ring-2 ring-islamic/30' : 'border-border'}
-                      `} />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium flex items-center gap-1.5">
-                          {t.icon} {t.label}
-                          {colorTheme === t.key && (
-                            <Check className="w-3.5 h-3.5 text-islamic" />
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
             <Button
               variant="ghost"
               size="icon"
