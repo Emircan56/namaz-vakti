@@ -251,6 +251,7 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
   const [mizanApplied, setMizanApplied] = useState(false);
   const [locationSource, setLocationSource] = useState<LocationSource>('default');
   const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
+  const [pushSupported, setPushSupported] = useState(false);
 
   const initialSettingsRef = useRef(getInitialSettings());
   const pushSubscriptionRef = useRef<PushSubscription | null>(null);
@@ -273,11 +274,14 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
     )
   );
 
-  // Push desteği kontrolü
-  const pushSupported = typeof window !== 'undefined' &&
-    'serviceWorker' in navigator &&
-    'PushManager' in window &&
-    VAPID_PUBLIC_KEY !== '';
+  // Push desteği kontrolü (client-side only — hidrasyon uyumu için useEffect)
+  useEffect(() => {
+    const supported =
+      'serviceWorker' in navigator &&
+      'PushManager' in window &&
+      VAPID_PUBLIC_KEY !== '';
+    setPushSupported(supported);
+  }, []);
 
   // ── Service Worker Kaydı ──
   useEffect(() => {

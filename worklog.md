@@ -21,3 +21,22 @@ Stage Summary:
 - Site kapalıyken push bildirim artık web-push protokolü ile gönderiliyor
 - Production build başarılı
 - Tüm endpoint'ler çalışıyor (/api/push, /api/push/notify, /api/push/test)
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: "Tarayıcınız push bildirimleri desteklemiyor" uyarısını kalıcı düzeltme
+
+Work Log:
+- Kök neden: .env dosyasından VAPID keyler silinmişti — build sırasında NEXT_PUBLIC_VAPID_PUBLIC_KEY boş string olarak gömülüyordu
+- VAPID keyler .env dosyasına geri eklendi
+- pushSupported değişkeni const'tan useState(false) + useEffect'e dönüştürüldü (hidrasyon uyumu)
+- Next.js build tamamlandı, VAPID key artık client JS bundle'da gömülü olarak doğrulandı
+- setPushSupported useEffect içinde çağrılıyor: setPushSupported("serviceWorker" in navigator && "PushManager" in window)
+- VAPID_PUBLIC_KEY !== '' kontrolü build zamanında optimize edildi (key sabit olduğu için her zaman true)
+
+Stage Summary:
+- .env dosyasına VAPID keyler geri eklendi
+- pushSupported hidrasyon düzeltmesi uygulandı (useState + useEffect)
+- Production build ve standalone server başarılı
+- Tüm endpoint'ler test edildi ve çalışıyor
