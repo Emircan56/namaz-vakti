@@ -491,7 +491,7 @@ function PrayerTimesList({
                       </Badge>
                     )}
                     {isNext && !isActive && (
-                      <Badge variant="outline" className="border-gold text-gold-foreground bg-gold/10 text-[9px] px-1 py-0 h-4 ml-1">
+                      <Badge variant="outline" className="border-gold text-gold bg-gold/10 text-[9px] px-1 py-0 h-4 ml-1 font-bold">
                         SONRAKİ
                       </Badge>
                     )}
