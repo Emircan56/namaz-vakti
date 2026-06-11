@@ -11,6 +11,7 @@ import {
   METHOD_CONFIGS,
   type CalculationMethod,
   formatTime,
+  getClockEmoji,
   type PrayerTimes,
   type PrayerInfo,
 } from '@/lib/prayer-calculator';
@@ -379,7 +380,7 @@ function CountdownCard({
                     İçinde bulunulan vakit
                   </div>
                   <div className="text-lg font-bold text-islamic truncate">
-                    {activePrayer.icon} {activePrayer.label}
+                    {activePrayer.key === 'yatsiSonu' && prayerTimes?.yatsiSonu ? getClockEmoji(prayerTimes.yatsiSonu) : activePrayer.icon} {activePrayer.label}
                   </div>
                 </div>
               )}
@@ -390,7 +391,7 @@ function CountdownCard({
                     Sıradaki vakit
                   </div>
                   <div className="text-base font-semibold text-foreground">
-                    {nextPrayer.icon} {nextPrayer.label}
+                    {nextPrayer.key === 'yatsiSonu' && prayerTimes?.yatsiSonu ? getClockEmoji(prayerTimes.yatsiSonu) : nextPrayer.icon} {nextPrayer.label}
                     <span className="text-sm font-normal text-muted-foreground ml-2">
                       {formatTime(prayerTimes[nextPrayer.key])}
                     </span>
@@ -483,7 +484,7 @@ function PrayerTimesList({
 
                 <div className="min-w-0">
                   <div className={`text-sm flex items-center gap-1.5 ${isActive ? 'font-bold text-islamic' : isNext ? 'font-medium text-foreground' : ''}`}>
-                    <span className="text-base leading-none">{prayer.icon}</span>
+                    <span className="text-base leading-none">{prayer.key === 'yatsiSonu' && prayerTimes.yatsiSonu ? getClockEmoji(prayerTimes.yatsiSonu) : prayer.icon}</span>
                     <span>{prayer.label}</span>
                     {isActive && (
                       <Badge className="bg-islamic text-islamic-foreground text-[9px] px-1 py-0 h-4 ml-1">

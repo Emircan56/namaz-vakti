@@ -834,8 +834,8 @@ export const PRAYER_ORDER_SV: PrayerInfo[] = [
   { key: 'ogle', label: 'Öğle', icon: '🌤️' },
   { key: 'ikindi', label: 'İkindi', icon: '⛅' },
   { key: 'aksam', label: 'Akşam', icon: '🌅' },
-  { key: 'yatsi', label: 'Yatsı', icon: '🌃' },
-  { key: 'yatsiSonu', label: 'Yatsı Sonu', icon: '🕐' },
+  { key: 'yatsi', label: 'Yatsı', icon: '🌆' },
+  { key: 'yatsiSonu', label: 'Yatsı Sonu', icon: '🕤' },
 ];
 
 // Diğer yöntemler: 6 vakit
@@ -845,7 +845,7 @@ export const PRAYER_ORDER_STANDARD: PrayerInfo[] = [
   { key: 'ogle', label: 'Öğle', icon: '🌤️' },
   { key: 'ikindi', label: 'İkindi', icon: '⛅' },
   { key: 'aksam', label: 'Akşam', icon: '🌅' },
-  { key: 'yatsi', label: 'Yatsı', icon: '🌃' },
+  { key: 'yatsi', label: 'Yatsı', icon: '🌆' },
 ];
 
 /** Geriye uyumluluk için */
@@ -891,6 +891,23 @@ export function getActivePrayer(
     next,
     timeUntilNext: times[keys[0]].getTime() - now.getTime(),
   };
+}
+
+/**
+ * Saat değerine en yakın saat emoji'sini döndürür.
+ * Örnek: 22:32 → 🕤 (22:30), 05:15 → 🕔 (05:00)
+ */
+export function getClockEmoji(date: Date): string {
+  // Saat emojileri: 12:00 → 🕛, 1:00 → 🕐, 2:00 → 🕑, ... 11:00 → 🕚
+  const clockEmojis = [
+    '🕛', '🕐', '🕑', '🕒', '🕓', '🕔',
+    '🕕', '🕖', '🕗', '🕘', '🕙', '🕚',
+  ];
+  const h = date.getHours() % 12;
+  const m = date.getMinutes();
+  // En yakın saate yuvarla (30 dk ve üzeri bir üst saate)
+  const roundedHour = m >= 30 ? (h + 1) % 12 : h;
+  return clockEmojis[roundedHour];
 }
 
 /**
