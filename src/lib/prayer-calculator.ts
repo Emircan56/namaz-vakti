@@ -833,8 +833,8 @@ export const PRAYER_ORDER_SV: PrayerInfo[] = [
   { key: 'gunes', label: 'Sabah Namazı Sonu', icon: '☀️' },
   { key: 'ogle', label: 'Öğle', icon: '🌤️' },
   { key: 'ikindi', label: 'İkindi', icon: '⛅' },
-  { key: 'aksam', label: 'Akşam', icon: '🌅' },
-  { key: 'yatsi', label: 'Yatsı', icon: '🌆' },
+  { key: 'aksam', label: 'Akşam', icon: '🌆' },
+  { key: 'yatsi', label: 'Yatsı', icon: '🌉' },
   { key: 'yatsiSonu', label: 'Yatsı Sonu', icon: '🕤' },
 ];
 
@@ -844,8 +844,8 @@ export const PRAYER_ORDER_STANDARD: PrayerInfo[] = [
   { key: 'gunes', label: 'Güneş', icon: '☀️' },
   { key: 'ogle', label: 'Öğle', icon: '🌤️' },
   { key: 'ikindi', label: 'İkindi', icon: '⛅' },
-  { key: 'aksam', label: 'Akşam', icon: '🌅' },
-  { key: 'yatsi', label: 'Yatsı', icon: '🌆' },
+  { key: 'aksam', label: 'Akşam', icon: '🌆' },
+  { key: 'yatsi', label: 'Yatsı', icon: '🌉' },
 ];
 
 /** Geriye uyumluluk için */
