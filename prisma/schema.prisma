@@ -1,10 +1,9 @@
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -13,14 +12,13 @@ model PushSubscription {
   endpoint   String @unique
   p256dh     String
   auth       String
-  // Kullanıcı ayarları — bildirim gönderirken hangi vakitleri hesaplayacağımızı bilmek için
   latitude   Float
   longitude  Float
   timezone   Float
   city       String  @default("")
   method     String  @default("suleymaniye")
   asrMadhab  String  @default("standard")
-  alarms     String  @default("{}") // JSON string
+  alarms     String  @default("{}")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
