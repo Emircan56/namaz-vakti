@@ -6,7 +6,6 @@ import {
   DEFAULT_CONFIG,
   METHOD_CONFIGS,
   type CalculationMethod,
-  formatTime,
   formatTimeForTimezone,
   getPrayerOrder,
   type PrayerAlarmSetting,
@@ -21,6 +20,9 @@ if (vapidPublicKey && vapidPrivateKey) {
   webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 }
 
+// Bildirim penceresi: 5 dakika (Vercel cron dakikalarca gecikebilir)
+const NOTIFICATION_WINDOW_MS = 5 * 60 * 1000; // 300000ms
+
 /**
  * Kullanıcının yerel tarihini YYYY-MM-DD formatında döndürür
  */
@@ -34,16 +36,72 @@ function getLocalDateStr(utcDate: Date, timezone: number): string {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * Eski gönderilmiş bildirim kayıtlarını temizle (24 saatten eskiler)
+ */
+async function cleanupOldNotifications() {
+  try {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    await db.sentNotification.deleteMany({
+      where: { createdAt: { lt: cutoff } },
+    });
+  } catch {
+    // Temizlik başarısız olsa bile devam et
+  }
+}
+
+/**
+ * Çift abonelikleri temizle — aynı endpoint'ten birden fazla varsa eskisini sil
+ */
+async function cleanupDuplicateSubscriptions() {
+  try {
+    const subs = await db.pushSubscription.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const seenEndpoints = new Set<string>();
+    const duplicates: string[] = [];
+
+    for (const sub of subs) {
+      if (seenEndpoints.has(sub.endpoint)) {
+        duplicates.push(sub.id);
+      } else {
+        seenEndpoints.add(sub.endpoint);
+      }
+    }
+
+    if (duplicates.length > 0) {
+      await db.pushSubscription.deleteMany({
+        where: { id: { in: duplicates } },
+      });
+    }
+
+    return duplicates.length;
+  } catch {
+    return 0;
+  }
+}
+
 // GET: Tüm abonelikleri kontrol et, vakti gelenlere bildirim gönder
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const testMode = searchParams.get('test') === '1';
 
+    // Eski bildirim kayıtlarını temizle
+    await cleanupOldNotifications();
+
+    // Çift abonelikleri temizle
+    const duplicatesRemoved = await cleanupDuplicateSubscriptions();
+
     const subscriptions = await db.pushSubscription.findMany();
     const now = new Date();
     let notificationsSent = 0;
     const details: string[] = [];
+
+    if (duplicatesRemoved > 0) {
+      details.push(`🧹 ${duplicatesRemoved} çift abonelik temizlendi`);
+    }
 
     if (subscriptions.length === 0) {
       return NextResponse.json({
@@ -51,12 +109,10 @@ export async function GET(request: NextRequest) {
         message: 'Aktif abonelik bulunamadı. Bildirim almak için önce sitede bildirim izni vermelisiniz.',
         checked: 0,
         notificationsSent: 0,
+        details,
         timestamp: now.toISOString(),
       });
     }
-
-    // Tekrar gönderim engelleme
-    const sentKeys = new Set<string>();
 
     for (const sub of subscriptions) {
       try {
@@ -106,12 +162,16 @@ export async function GET(request: NextRequest) {
 
           const diff = prayerTime.getTime() - now.getTime();
 
-          // Ana bildirim: vaktin tam zamanında (0 ile -90 saniye arası)
-          if (diff <= 0 && diff > -90000) {
+          // Ana bildirim: vaktin tam zamanında (0 ile -5 dakika arası)
+          if (diff <= 0 && diff > -NOTIFICATION_WINDOW_MS) {
             const notifKey = `prayer-${p.key}-${localDateStr}`;
 
-            if (!sentKeys.has(notifKey)) {
-              sentKeys.add(notifKey);
+            // DB'de bu bildirim daha önce gönderilmiş mi kontrol et
+            const alreadySent = await db.sentNotification.findUnique({
+              where: { notifKey },
+            });
+
+            if (!alreadySent) {
               const payload = {
                 title: `${p.label} Vakti`,
                 body: `${p.label} vakti geldi: ${formatTimeForTimezone(prayerTime, sub.timezone)}`,
@@ -127,6 +187,12 @@ export async function GET(request: NextRequest) {
                   JSON.stringify(payload)
                 );
                 notificationsSent++;
+
+                // DB'ye kaydet — tekrar gönderilmesin
+                await db.sentNotification.create({
+                  data: { notifKey },
+                });
+
                 details.push(`✅ ${p.label} bildirimi gönderildi`);
               } catch (pushError: any) {
                 if (pushError.statusCode === 410 || pushError.statusCode === 404) {
@@ -144,11 +210,14 @@ export async function GET(request: NextRequest) {
             const preAlarmTime = prayerTime.getTime() - alarm.preAlarm.minutes * 60 * 1000;
             const preAlarmDiff = preAlarmTime - now.getTime();
 
-            if (preAlarmDiff <= 0 && preAlarmDiff > -90000) {
+            if (preAlarmDiff <= 0 && preAlarmDiff > -NOTIFICATION_WINDOW_MS) {
               const notifKey = `prealarm-${p.key}-${localDateStr}`;
 
-              if (!sentKeys.has(notifKey)) {
-                sentKeys.add(notifKey);
+              const alreadySent = await db.sentNotification.findUnique({
+                where: { notifKey },
+              });
+
+              if (!alreadySent) {
                 const payload = {
                   title: `${p.label} Yaklaşıyor`,
                   body: `${p.label} vaktine ${alarm.preAlarm.minutes} dakika kaldı`,
@@ -164,6 +233,11 @@ export async function GET(request: NextRequest) {
                     JSON.stringify(payload)
                   );
                   notificationsSent++;
+
+                  await db.sentNotification.create({
+                    data: { notifKey },
+                  });
+
                   details.push(`✅ ${p.label} pre-alarm gönderildi`);
                 } catch (pushError: any) {
                   if (pushError.statusCode === 410 || pushError.statusCode === 404) {
