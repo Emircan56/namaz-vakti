@@ -580,10 +580,8 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!prayerTimes) return;
 
-    // Push aboneliği aktifse, sunucu zaten push bildirimi gönderecek
-    // Lokal bildirim sadece push yoksa (fallback) çalışsın
+    // Lokal bildirim HER ZAMAN çalışsın (push server-side cron gecikmeli olabilir)
     const hasPushSubscription = settings.pushEnabled && !!pushSubscriptionRef.current;
-    if (hasPushSubscription) return;
 
     const interval = setInterval(() => {
       const now = new Date();
@@ -597,7 +595,7 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
         const diff = prayerTime.getTime() - now.getTime();
 
         const prayerNotifKey = `prayer-${p.key}-${prayerTime.getTime()}`;
-        if (diff <= 0 && diff > -90000 && !notifiedRef.current.has(prayerNotifKey)) {
+        if (diff <= 0 && diff > -120000 && !notifiedRef.current.has(prayerNotifKey)) {
           notifiedRef.current.add(prayerNotifKey);
           // Service Worker üzerinden göster (daha güvenilir)
           navigator.serviceWorker?.ready.then(reg => {
@@ -623,7 +621,7 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
           const preAlarmTime = prayerTime.getTime() - alarm.preAlarm.minutes * 60 * 1000;
           const preAlarmDiff = preAlarmTime - now.getTime();
           const preAlarmNotifKey = `prealarm-${p.key}-${prayerTime.getTime()}-${alarm.preAlarm.minutes}`;
-          if (preAlarmDiff <= 0 && preAlarmDiff > -90000 && !notifiedRef.current.has(preAlarmNotifKey)) {
+          if (preAlarmDiff <= 0 && preAlarmDiff > -120000 && !notifiedRef.current.has(preAlarmNotifKey)) {
             notifiedRef.current.add(preAlarmNotifKey);
             navigator.serviceWorker?.ready.then(reg => {
               reg.showNotification(`${p.label} Yaklaşıyor`, {

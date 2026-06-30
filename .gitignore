@@ -47,3 +47,4 @@ next-env.d.ts
 /tool-results/
 /scripts/
 /worklog.md
+.env*
