@@ -370,7 +370,7 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
       // Push aboneliği oluştur
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as BufferSource,
       });
 
       pushSubscriptionRef.current = subscription;
@@ -606,7 +606,6 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
               icon: '/favicon.ico',
               tag: `prayer-${p.key}`,
               requireInteraction: true,
-              vibrate: [200, 100, 200],
             });
           }).catch(() => {
             // Fallback: doğrudan Notification API
@@ -632,7 +631,6 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
                 icon: '/favicon.ico',
                 tag: `prealarm-${p.key}`,
                 requireInteraction: true,
-                vibrate: [200, 100, 200],
               });
             }).catch(() => {
               try {
