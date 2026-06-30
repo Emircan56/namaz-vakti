@@ -23,6 +23,9 @@ if (vapidPublicKey && vapidPrivateKey) {
 // Bildirim penceresi: 5 dakika (Vercel cron dakikalarca gecikebilir)
 const NOTIFICATION_WINDOW_MS = 5 * 60 * 1000; // 300000ms
 
+// Bellek içi tekrar engelleme (SentNotification tablosu olmadan çalışabilmesi için)
+const sentKeysCache = new Set<string>();
+
 /**
  * Kullanıcının yerel tarihini YYYY-MM-DD formatında döndürür
  */
@@ -34,20 +37,6 @@ function getLocalDateStr(utcDate: Date, timezone: number): string {
   const m = String(userLocalDate.getUTCMonth() + 1).padStart(2, '0');
   const d = String(userLocalDate.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
-}
-
-/**
- * Eski gönderilmiş bildirim kayıtlarını temizle (24 saatten eskiler)
- */
-async function cleanupOldNotifications() {
-  try {
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    await db.sentNotification.deleteMany({
-      where: { createdAt: { lt: cutoff } },
-    });
-  } catch {
-    // Temizlik başarısız olsa bile devam et
-  }
 }
 
 /**
@@ -82,14 +71,44 @@ async function cleanupDuplicateSubscriptions() {
   }
 }
 
+/**
+ * Bildirim zaten gönderilmiş mi kontrol et (DB + bellek)
+ */
+async function isAlreadySent(notifKey: string): Promise<boolean> {
+  if (sentKeysCache.has(notifKey)) return true;
+  try {
+    const existing = await db.sentNotification.findUnique({
+      where: { notifKey },
+    });
+    if (existing) {
+      sentKeysCache.add(notifKey);
+      return true;
+    }
+  } catch {
+    // Tablo yoksa bellek cache kullan
+  }
+  return false;
+}
+
+/**
+ * Bildirim gönderildi olarak işaretle
+ */
+async function markAsSent(notifKey: string): Promise<void> {
+  sentKeysCache.add(notifKey);
+  try {
+    await db.sentNotification.create({
+      data: { notifKey },
+    });
+  } catch {
+    // Tablo yoksa sessizce devam et
+  }
+}
+
 // GET: Tüm abonelikleri kontrol et, vakti gelenlere bildirim gönder
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const testMode = searchParams.get('test') === '1';
-
-    // Eski bildirim kayıtlarını temizle
-    await cleanupOldNotifications();
 
     // Çift abonelikleri temizle
     const duplicatesRemoved = await cleanupDuplicateSubscriptions();
@@ -106,7 +125,7 @@ export async function GET(request: NextRequest) {
     if (subscriptions.length === 0) {
       return NextResponse.json({
         success: true,
-        message: 'Aktif abonelik bulunamadı. Bildirim almak için önce sitede bildirim izni vermelisiniz.',
+        message: 'Aktif abonelik bulunamadı.',
         checked: 0,
         notificationsSent: 0,
         details,
@@ -150,7 +169,6 @@ export async function GET(request: NextRequest) {
           if (parsedAlarms[p.key]) {
             alarms[p.key] = parsedAlarms[p.key];
           } else {
-            // Varsayılan: alarm açık, pre-alarm kapalı (imsak hariç)
             alarms[p.key] = {
               vakit: p.key,
               alarm: true,
@@ -189,11 +207,7 @@ export async function GET(request: NextRequest) {
           if (diff <= 0 && diff > -NOTIFICATION_WINDOW_MS) {
             const notifKey = `prayer-${p.key}-${localDateStr}`;
 
-            // DB'de bu bildirim daha önce gönderilmiş mi kontrol et
-            const alreadySent = await db.sentNotification.findUnique({
-              where: { notifKey },
-            });
-
+            const alreadySent = await isAlreadySent(notifKey);
             if (!alreadySent) {
               const payload = {
                 title: `${p.label} Vakti`,
@@ -210,12 +224,7 @@ export async function GET(request: NextRequest) {
                   JSON.stringify(payload)
                 );
                 notificationsSent++;
-
-                // DB'ye kaydet — tekrar gönderilmesin
-                await db.sentNotification.create({
-                  data: { notifKey },
-                });
-
+                await markAsSent(notifKey);
                 details.push(`✅ ${p.label} bildirimi gönderildi`);
               } catch (pushError: any) {
                 if (pushError.statusCode === 410 || pushError.statusCode === 404) {
@@ -236,10 +245,7 @@ export async function GET(request: NextRequest) {
             if (preAlarmDiff <= 0 && preAlarmDiff > -NOTIFICATION_WINDOW_MS) {
               const notifKey = `prealarm-${p.key}-${localDateStr}`;
 
-              const alreadySent = await db.sentNotification.findUnique({
-                where: { notifKey },
-              });
-
+              const alreadySent = await isAlreadySent(notifKey);
               if (!alreadySent) {
                 const payload = {
                   title: `${p.label} Yaklaşıyor`,
@@ -256,11 +262,7 @@ export async function GET(request: NextRequest) {
                     JSON.stringify(payload)
                   );
                   notificationsSent++;
-
-                  await db.sentNotification.create({
-                    data: { notifKey },
-                  });
-
+                  await markAsSent(notifKey);
                   details.push(`✅ ${p.label} pre-alarm gönderildi`);
                 } catch (pushError: any) {
                   if (pushError.statusCode === 410 || pushError.statusCode === 404) {
