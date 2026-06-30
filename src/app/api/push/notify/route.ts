@@ -139,17 +139,40 @@ export async function GET(request: NextRequest) {
           city: sub.city,
         });
 
-        const alarms: Record<string, PrayerAlarmSetting> = JSON.parse(sub.alarms || '{}');
+        const parsedAlarms: Record<string, PrayerAlarmSetting> = JSON.parse(sub.alarms || '{}');
         const prayerOrder = getPrayerOrder(method);
         const localDateStr = getLocalDateStr(now, sub.timezone);
 
-        // Test modu: tüm vakitleri listele
+        // Eğer alarms boşsa, tüm vakitler için varsayılan alarm açık olsun
+        const hasAnyAlarm = Object.keys(parsedAlarms).length > 0;
+        const alarms: Record<string, PrayerAlarmSetting> = {};
+        for (const p of prayerOrder) {
+          if (parsedAlarms[p.key]) {
+            alarms[p.key] = parsedAlarms[p.key];
+          } else {
+            // Varsayılan: alarm açık, pre-alarm kapalı (imsak hariç)
+            alarms[p.key] = {
+              vakit: p.key,
+              alarm: true,
+              preAlarm: {
+                enabled: p.key === 'imsak',
+                minutes: 15,
+              },
+            };
+          }
+        }
+
+        // Test modu: tüm vakitleri + alarm durumunu listele
         if (testMode) {
           for (const p of prayerOrder) {
             const prayerTime = result.times[p.key];
             const diff = prayerTime.getTime() - now.getTime();
             const diffMin = Math.round(diff / 60000);
-            details.push(`${p.label}: ${formatTimeForTimezone(prayerTime, sub.timezone)} (fark: ${diffMin}dk)`);
+            const alarmStatus = alarms[p.key]?.alarm ? '🔔' : '🔕';
+            details.push(`${alarmStatus} ${p.label}: ${formatTimeForTimezone(prayerTime, sub.timezone)} (fark: ${diffMin}dk)`);
+          }
+          if (!hasAnyAlarm) {
+            details.push('⚠️ Alarms boştu, varsayılan alarmlar uygulandı');
           }
         }
 
