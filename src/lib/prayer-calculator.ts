@@ -826,6 +826,17 @@ export interface PrayerInfo {
   icon: string;
 }
 
+export interface PreAlarmSetting {
+  enabled: boolean;
+  minutes: number;
+}
+
+export interface PrayerAlarmSetting {
+  vakit: string;
+  alarm: boolean;
+  preAlarm: PreAlarmSetting;
+}
+
 // Süleymaniye Vakfı: 8 vakit
 export const PRAYER_ORDER_SV: PrayerInfo[] = [
   { key: 'seher', label: 'Seher Vakti', icon: '🌙' },
