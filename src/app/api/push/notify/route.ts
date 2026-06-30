@@ -20,15 +20,12 @@ if (vapidPublicKey && vapidPrivateKey) {
   webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 }
 
-// Bildirim penceresi: 5 dakika (Vercel cron dakikalarca gecikebilir)
-const NOTIFICATION_WINDOW_MS = 5 * 60 * 1000; // 300000ms
+// Bildirim penceresi: 5 dakika
+const NOTIFICATION_WINDOW_MS = 5 * 60 * 1000;
 
-// Bellek içi tekrar engelleme (SentNotification tablosu olmadan çalışabilmesi için)
+// Bellek içi tekrar engelleme (serverless'ta her cold start'ta sıfırlanır ama yine de yardımcı)
 const sentKeysCache = new Set<string>();
 
-/**
- * Kullanıcının yerel tarihini YYYY-MM-DD formatında döndürür
- */
 function getLocalDateStr(utcDate: Date, timezone: number): string {
   const utcMs = utcDate.getTime();
   const userLocalMs = utcMs + timezone * 3600000;
@@ -39,18 +36,44 @@ function getLocalDateStr(utcDate: Date, timezone: number): string {
   return `${y}-${m}-${d}`;
 }
 
-/**
- * Çift abonelikleri temizle — aynı endpoint'ten birden fazla varsa eskisini sil
- */
-async function cleanupDuplicateSubscriptions() {
+// SentNotification tablosu varsa kontrol et, yoksa atla
+async function isAlreadySent(notifKey: string): Promise<boolean> {
+  if (sentKeysCache.has(notifKey)) return true;
+  try {
+    const result = await db.$queryRaw`
+      SELECT "notifKey" FROM "SentNotification" WHERE "notifKey" = ${notifKey} LIMIT 1
+    ` as any[];
+    if (result.length > 0) {
+      sentKeysCache.add(notifKey);
+      return true;
+    }
+  } catch {
+    // Tablo yoksa devam et
+  }
+  return false;
+}
+
+async function markAsSent(notifKey: string): Promise<void> {
+  sentKeysCache.add(notifKey);
+  try {
+    const id = `sn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    await db.$executeRaw`
+      INSERT INTO "SentNotification" ("id", "notifKey", "createdAt")
+      VALUES (${id}, ${notifKey}, NOW())
+    `;
+  } catch {
+    // Tablo yoksa devam et
+  }
+}
+
+// Çift abonelikleri temizle
+async function cleanupDuplicateSubscriptions(): Promise<number> {
   try {
     const subs = await db.pushSubscription.findMany({
       orderBy: { createdAt: 'desc' },
     });
-
     const seenEndpoints = new Set<string>();
     const duplicates: string[] = [];
-
     for (const sub of subs) {
       if (seenEndpoints.has(sub.endpoint)) {
         duplicates.push(sub.id);
@@ -58,49 +81,14 @@ async function cleanupDuplicateSubscriptions() {
         seenEndpoints.add(sub.endpoint);
       }
     }
-
     if (duplicates.length > 0) {
       await db.pushSubscription.deleteMany({
         where: { id: { in: duplicates } },
       });
     }
-
     return duplicates.length;
   } catch {
     return 0;
-  }
-}
-
-/**
- * Bildirim zaten gönderilmiş mi kontrol et (DB + bellek)
- */
-async function isAlreadySent(notifKey: string): Promise<boolean> {
-  if (sentKeysCache.has(notifKey)) return true;
-  try {
-    const existing = await db.sentNotification.findUnique({
-      where: { notifKey },
-    });
-    if (existing) {
-      sentKeysCache.add(notifKey);
-      return true;
-    }
-  } catch {
-    // Tablo yoksa bellek cache kullan
-  }
-  return false;
-}
-
-/**
- * Bildirim gönderildi olarak işaretle
- */
-async function markAsSent(notifKey: string): Promise<void> {
-  sentKeysCache.add(notifKey);
-  try {
-    await db.sentNotification.create({
-      data: { notifKey },
-    });
-  } catch {
-    // Tablo yoksa sessizce devam et
   }
 }
 
@@ -110,9 +98,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const testMode = searchParams.get('test') === '1';
 
-    // Çift abonelikleri temizle
     const duplicatesRemoved = await cleanupDuplicateSubscriptions();
-
     const subscriptions = await db.pushSubscription.findMany();
     const now = new Date();
     let notificationsSent = 0;
@@ -124,12 +110,8 @@ export async function GET(request: NextRequest) {
 
     if (subscriptions.length === 0) {
       return NextResponse.json({
-        success: true,
-        message: 'Aktif abonelik bulunamadı.',
-        checked: 0,
-        notificationsSent: 0,
-        details,
-        timestamp: now.toISOString(),
+        success: true, message: 'Aktif abonelik bulunamadı.',
+        checked: 0, notificationsSent: 0, details, timestamp: now.toISOString(),
       });
     }
 
@@ -137,10 +119,7 @@ export async function GET(request: NextRequest) {
       try {
         const method = sub.method as CalculationMethod;
         const mc = METHOD_CONFIGS[method];
-        if (!mc) {
-          details.push(`Bilinmeyen yöntem: ${method}`);
-          continue;
-        }
+        if (!mc) { details.push(`Bilinmeyen yöntem: ${method}`); continue; }
 
         const config = {
           method,
@@ -152,10 +131,8 @@ export async function GET(request: NextRequest) {
 
         const calculator = new SuleymaniyePrayerCalculator(config, sub.asrMadhab as 'standard' | 'hanafi');
         const result = calculator.calculate(now, {
-          latitude: sub.latitude,
-          longitude: sub.longitude,
-          timezone: sub.timezone,
-          city: sub.city,
+          latitude: sub.latitude, longitude: sub.longitude,
+          timezone: sub.timezone, city: sub.city,
         });
 
         const parsedAlarms: Record<string, PrayerAlarmSetting> = JSON.parse(sub.alarms || '{}');
@@ -172,15 +149,12 @@ export async function GET(request: NextRequest) {
             alarms[p.key] = {
               vakit: p.key,
               alarm: true,
-              preAlarm: {
-                enabled: p.key === 'imsak',
-                minutes: 15,
-              },
+              preAlarm: { enabled: p.key === 'imsak', minutes: 15 },
             };
           }
         }
 
-        // Test modu: tüm vakitleri + alarm durumunu listele
+        // Test modu
         if (testMode) {
           for (const p of prayerOrder) {
             const prayerTime = result.times[p.key];
@@ -203,21 +177,16 @@ export async function GET(request: NextRequest) {
 
           const diff = prayerTime.getTime() - now.getTime();
 
-          // Ana bildirim: vaktin tam zamanında (0 ile -5 dakika arası)
+          // Ana bildirim: 0 ile -5 dakika arası
           if (diff <= 0 && diff > -NOTIFICATION_WINDOW_MS) {
             const notifKey = `prayer-${p.key}-${localDateStr}`;
-
             const alreadySent = await isAlreadySent(notifKey);
             if (!alreadySent) {
               const payload = {
                 title: `${p.label} Vakti`,
                 body: `${p.label} vakti geldi: ${formatTimeForTimezone(prayerTime, sub.timezone)}`,
-                icon: '/favicon.ico',
-                tag: notifKey,
-                prayerKey: p.key,
-                url: '/',
+                icon: '/favicon.ico', tag: notifKey, prayerKey: p.key, url: '/',
               };
-
               try {
                 await webpush.sendNotification(
                   { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
@@ -241,21 +210,15 @@ export async function GET(request: NextRequest) {
           if (alarm.preAlarm?.enabled && alarm.preAlarm.minutes > 0) {
             const preAlarmTime = prayerTime.getTime() - alarm.preAlarm.minutes * 60 * 1000;
             const preAlarmDiff = preAlarmTime - now.getTime();
-
             if (preAlarmDiff <= 0 && preAlarmDiff > -NOTIFICATION_WINDOW_MS) {
               const notifKey = `prealarm-${p.key}-${localDateStr}`;
-
               const alreadySent = await isAlreadySent(notifKey);
               if (!alreadySent) {
                 const payload = {
                   title: `${p.label} Yaklaşıyor`,
                   body: `${p.label} vaktine ${alarm.preAlarm.minutes} dakika kaldı`,
-                  icon: '/favicon.ico',
-                  tag: notifKey,
-                  prayerKey: p.key,
-                  url: '/',
+                  icon: '/favicon.ico', tag: notifKey, prayerKey: p.key, url: '/',
                 };
-
                 try {
                   await webpush.sendNotification(
                     { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
@@ -279,11 +242,8 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      success: true,
-      checked: subscriptions.length,
-      notificationsSent,
-      details,
-      timestamp: now.toISOString(),
+      success: true, checked: subscriptions.length,
+      notificationsSent, details, timestamp: now.toISOString(),
     });
   } catch (error: any) {
     console.error('Bildirim gönderme hatası:', error);
@@ -291,33 +251,26 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: Test bildirimi gönder (manuel tetikleme)
+// POST: Test bildirimi gönder
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { title, body: notifBody } = body;
-
     const subscriptions = await db.pushSubscription.findMany();
 
     if (subscriptions.length === 0) {
       return NextResponse.json({
-        success: false,
-        message: 'Aktif abonelik yok. Önce sitede bildirim izni verin.',
+        success: false, message: 'Aktif abonelik yok.',
       }, { status: 400 });
     }
 
-    let sent = 0;
-    let failed = 0;
-
+    let sent = 0, failed = 0;
     for (const sub of subscriptions) {
       const payload = {
         title: title || '🔔 Test Bildirimi',
         body: notifBody || 'Bu bir test bildirimidir. Push bildirimler çalışıyor!',
-        icon: '/favicon.ico',
-        tag: `test-${Date.now()}`,
-        url: '/',
+        icon: '/favicon.ico', tag: `test-${Date.now()}`, url: '/',
       };
-
       try {
         await webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
@@ -332,12 +285,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      sent,
-      failed,
-      total: subscriptions.length,
-    });
+    return NextResponse.json({ success: true, sent, failed, total: subscriptions.length });
   } catch (error: any) {
     console.error('Test bildirim hatası:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
