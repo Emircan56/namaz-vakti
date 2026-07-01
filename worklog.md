@@ -64,3 +64,23 @@ Stage Summary:
 - Timezone-aware prayer time hesaplama düzeltmesi uygulandı
 - Sunucu-istemci saat dilimi uyuşmazlığı çözüldü
 - Node.js test ile 3 saatlik kayma düzeltmesi doğrulandı
+---
+Task ID: push-fix-site-closed
+Agent: main
+Task: Site kapalıyken bildirim gelmeme sorununu çöz
+
+Work Log:
+- Vercel CLI ile doğru projeye (mizan-namaz-vakitleri) deploy yapıldı
+- Vercel Hobby plan * * * * * cron'u desteklemiyor → günlük cron olarak değiştirildi
+- GitHub Actions workflow eklendi (5 dk aralıkla /api/push/notify tetikler)
+- SentNotification tablosu oluşturuldu (/api/db/migrate)
+- 20 geçersiz push aboneliği temizlendi (15'i 410 Gone), 5 geçerli kaldı
+- Service Worker v2 güncellendi (sürüm takibi, mesaj dinleyici)
+- Bildirim penceresi 5dk'dan 7dk'ya çıkarıldı (cron gecikme margini)
+- /api/push GET endpoint eklendi (abonelik durumunu listeler)
+- "Test Bildirimi" ve "Yeniden Kaydol" butonları eklendi
+
+Stage Summary:
+- Yeni kod Vercel'de yayında: https://mizan-namaz-vakitleri.vercel.app
+- GitHub Actions her 5 dakikada bir push bildirim kontrolü yapıyor
+- Kullanıcının telefonunda push aboneliğini yenilemesi gerekiyor
