@@ -561,12 +561,64 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
     });
   }, [getMethodConfig]);
 
-  // ── Tarayıcı İçi Bildirim (sekme açıkken fallback) ──
-  // Push aboneliği aktifse sunucu zaten push bildirimi göndereceği için
-  // lokal bildirim göstermiyoruz — aksi takdirde çift bildirim oluşur.
-  // Push yoksa (VAPID key yok, tarayıcı desteklemiyor vb.) lokal bildirim fallback olarak çalışır.
+  // ── Tarayıcı İçi Bildirim (sekme açıkken) ──
+  // Push aboneliği aktif olsa bile lokal bildirim de gösterilir çünkü:
+  // 1. Server-side cron gecikmeli olabilir
+  // 2. Push aboneliği süresi dolmuş olabilir
+  // 3. Fallback olarak her zaman çalışmalı
+  // NOT: Aynı tag ile bildirim gösterildiğinde eski bildirim yenilenir (çift bildirim olmaz)
   const notifiedRef = useRef<Set<string>>(new Set());
 
+  // Bildirim gösterme fonksiyonu (hem ana hem pre-alarm için ortak)
+  const showNotification = useCallback((title: string, body: string, tag: string) => {
+    navigator.serviceWorker?.ready.then(reg => {
+      reg.showNotification(title, {
+        body,
+        icon: '/favicon.ico',
+        tag,
+        requireInteraction: true,
+      });
+    }).catch(() => {
+      try {
+        new Notification(title, { body, icon: '/favicon.ico', tag });
+      } catch {}
+    });
+  }, []);
+
+  // Bildirim kontrol fonksiyonu
+  const checkAndNotify = useCallback(() => {
+    if (!prayerTimes) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    const now = new Date();
+    for (const p of getPrayerOrder(settings.calculationMethod)) {
+      const alarm = settings.alarms[p.key];
+      if (!alarm || !alarm.alarm) continue;
+
+      const prayerTime = prayerTimes[p.key];
+      const diff = prayerTime.getTime() - now.getTime();
+
+      // Ana bildirim: vakit girdikten sonra 10 dakika içinde göster
+      const prayerNotifKey = `prayer-${p.key}-${prayerTime.getTime()}`;
+      if (diff <= 0 && diff > -600000 && !notifiedRef.current.has(prayerNotifKey)) {
+        notifiedRef.current.add(prayerNotifKey);
+        showNotification(`${p.label} Vakti`, `${p.label} vakti geldi: ${formatTime(prayerTime)}`, `prayer-${p.key}`);
+      }
+
+      // Pre-alarm (hatırlatıcı) bildirimi: 10 dakika pencere
+      if (alarm.preAlarm.enabled && alarm.preAlarm.minutes > 0) {
+        const preAlarmTime = prayerTime.getTime() - alarm.preAlarm.minutes * 60 * 1000;
+        const preAlarmDiff = preAlarmTime - now.getTime();
+        const preAlarmNotifKey = `prealarm-${p.key}-${prayerTime.getTime()}-${alarm.preAlarm.minutes}`;
+        if (preAlarmDiff <= 0 && preAlarmDiff > -600000 && !notifiedRef.current.has(preAlarmNotifKey)) {
+          notifiedRef.current.add(preAlarmNotifKey);
+          showNotification(`${p.label} Yaklaşıyor`, `${p.label} vaktine ${alarm.preAlarm.minutes} dakika kaldı`, `prealarm-${p.key}`);
+        }
+      }
+    }
+  }, [prayerTimes, settings.alarms, settings.calculationMethod, showNotification]);
+
+  // Her gece yarısı notifiedRef'i sıfırla
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
@@ -577,74 +629,22 @@ export function PrayerAppProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, []);
 
+  // Ana bildirim kontrol döngüsü — her saniye kontrol et
   useEffect(() => {
-    if (!prayerTimes) return;
-
-    // Lokal bildirim HER ZAMAN çalışsın (push server-side cron gecikmeli olabilir)
-    const hasPushSubscription = settings.pushEnabled && !!pushSubscriptionRef.current;
-
-    const interval = setInterval(() => {
-      const now = new Date();
-      if (!('Notification' in window) || Notification.permission !== 'granted') return;
-
-      for (const p of getPrayerOrder(settings.calculationMethod)) {
-        const alarm = settings.alarms[p.key];
-        if (!alarm || !alarm.alarm) continue;
-
-        const prayerTime = prayerTimes[p.key];
-        const diff = prayerTime.getTime() - now.getTime();
-
-        const prayerNotifKey = `prayer-${p.key}-${prayerTime.getTime()}`;
-        if (diff <= 0 && diff > -120000 && !notifiedRef.current.has(prayerNotifKey)) {
-          notifiedRef.current.add(prayerNotifKey);
-          // Service Worker üzerinden göster (daha güvenilir)
-          navigator.serviceWorker?.ready.then(reg => {
-            reg.showNotification(`${p.label} Vakti`, {
-              body: `${p.label} vakti geldi: ${formatTime(prayerTime)}`,
-              icon: '/favicon.ico',
-              tag: `prayer-${p.key}`,
-              requireInteraction: true,
-            });
-          }).catch(() => {
-            // Fallback: doğrudan Notification API
-            try {
-              new Notification(`${p.label} Vakti`, {
-                body: `${p.label} vakti geldi: ${formatTime(prayerTime)}`,
-                icon: '/favicon.ico',
-                tag: `prayer-${p.key}`,
-              });
-            } catch {}
-          });
-        }
-
-        if (alarm.preAlarm.enabled && alarm.preAlarm.minutes > 0) {
-          const preAlarmTime = prayerTime.getTime() - alarm.preAlarm.minutes * 60 * 1000;
-          const preAlarmDiff = preAlarmTime - now.getTime();
-          const preAlarmNotifKey = `prealarm-${p.key}-${prayerTime.getTime()}-${alarm.preAlarm.minutes}`;
-          if (preAlarmDiff <= 0 && preAlarmDiff > -120000 && !notifiedRef.current.has(preAlarmNotifKey)) {
-            notifiedRef.current.add(preAlarmNotifKey);
-            navigator.serviceWorker?.ready.then(reg => {
-              reg.showNotification(`${p.label} Yaklaşıyor`, {
-                body: `${p.label} vaktine ${alarm.preAlarm.minutes} dakika kaldı`,
-                icon: '/favicon.ico',
-                tag: `prealarm-${p.key}`,
-                requireInteraction: true,
-              });
-            }).catch(() => {
-              try {
-                new Notification(`${p.label} Yaklaşıyor`, {
-                  body: `${p.label} vaktine ${alarm.preAlarm.minutes} dakika kaldı`,
-                  icon: '/favicon.ico',
-                  tag: `prealarm-${p.key}`,
-                });
-              } catch {}
-            });
-          }
-        }
-      }
-    }, 1000);
+    const interval = setInterval(checkAndNotify, 1000);
     return () => clearInterval(interval);
-  }, [prayerTimes, settings.alarms, settings.calculationMethod, settings.pushEnabled]);
+  }, [checkAndNotify]);
+
+  // Sekme tekrar görünür olduğunda hemen kontrol et (arka plan throttle'ı telafisi)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkAndNotify();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [checkAndNotify]);
 
   const prayerOrder = getPrayerOrder(settings.calculationMethod);
 
