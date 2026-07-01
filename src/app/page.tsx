@@ -686,11 +686,53 @@ function SettingsSheet({
                   />
                 </div>
                 {settings.pushEnabled && pushPermission === 'granted' && (
-                  <div className="flex items-center gap-2 p-2 rounded-md bg-islamic/5 border border-islamic/10">
-                    <BellRing className="w-3.5 h-3.5 text-islamic shrink-0" />
-                    <span className="text-[10px] text-islamic/70 leading-relaxed">
-                      Push bildirimleri aktif — tarayıcı kapalıyken bile vakti geldiğinde bildirim alacaksınız.
-                    </span>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 p-2 rounded-md bg-islamic/5 border border-islamic/10">
+                      <BellRing className="w-3.5 h-3.5 text-islamic shrink-0" />
+                      <span className="text-[10px] text-islamic/70 leading-relaxed">
+                        Push bildirimleri aktif — tarayıcı kapalıyken bile vakti geldiğinde bildirim alacaksınız.
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        className="flex-1 text-[11px] px-3 py-1.5 rounded-md bg-islamic/10 hover:bg-islamic/20 text-islamic border border-islamic/20 transition-colors"
+                        onClick={async () => {
+                          try {
+                            const res = await fetch('/api/push/notify', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ title: '🔔 Test Bildirimi', body: 'Push bildirimleri çalışıyor! Site kapalıyken de bildirim alacaksınız.' }),
+                            });
+                            const data = await res.json();
+                            if (data.sent > 0) {
+                              alert(`✅ Test bildirimi gönderildi! (${data.sent} cihaz)`);
+                            } else {
+                              alert('⚠️ Abonelik bulunamadı. Lütfen "Yeniden Kaydol" butonuna basın.');
+                            }
+                          } catch {
+                            alert('❌ Test bildirimi gönderilemedi.');
+                          }
+                        }}
+                      >
+                        Test Bildirimi
+                      </button>
+                      <button
+                        className="flex-1 text-[11px] px-3 py-1.5 rounded-md bg-islamic/10 hover:bg-islamic/20 text-islamic border border-islamic/20 transition-colors"
+                        onClick={async () => {
+                          // Push aboneliğini yeniden kaydet
+                          await disablePushNotifications();
+                          const success = await enablePushNotifications();
+                          if (success) {
+                            updateSettings({ pushEnabled: true });
+                            alert('✅ Push aboneliği yeniden kaydedildi! Şimdi "Test Bildirimi" ile doğrulayın.');
+                          } else {
+                            alert('❌ Yeniden kayıt başarısız. Bildirim iznini kontrol edin.');
+                          }
+                        }}
+                      >
+                        Yeniden Kaydol
+                      </button>
+                    </div>
                   </div>
                 )}
                 {pushPermission === 'denied' && (
