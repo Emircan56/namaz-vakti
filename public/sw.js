@@ -1,44 +1,41 @@
 /// <reference lib="webworker" />
 
-// Süleymaniye Vakfı Namaz Vakitleri - Service Worker
+// Süleymaniye Vakfı Namaz Vakitleri - Service Worker v2
 // Push bildirimlerini alıp gösterir, tarayıcı kapalıyken bile çalışır
 
+const SW_VERSION = '2.0.0';
 const NOTIFICATION_ICON = '/favicon.ico';
 
 // Push bildirimi alındığında
 self.addEventListener('push', (event) => {
-  if (!event.data) return;
-
-  try {
-    const data = event.data.json();
-
-    const title = data.title || 'Namaz Vakti';
-    const options = {
-      body: data.body || '',
-      icon: data.icon || NOTIFICATION_ICON,
-      badge: NOTIFICATION_ICON,
-      tag: data.tag || 'prayer-notification',
-      requireInteraction: true, // Kullanıcı kapatana kadar ekranda kal
-      vibrate: [200, 100, 200], // Titreşim deseni
-      data: {
-        url: data.url || '/',
-        prayerKey: data.prayerKey || '',
-      },
-    };
-
-    event.waitUntil(
-      self.registration.showNotification(title, options)
-    );
-  } catch {
-    // JSON parse hatası — basit bildirim göster
-    event.waitUntil(
-      self.registration.showNotification('Namaz Vakti', {
-        body: 'Bir namaz vakti yaklaşıyor',
-        icon: NOTIFICATION_ICON,
-        requireInteraction: true,
-      })
-    );
+  // Data yoksa bile bildirim göster (bazı push servisleri boş push gönderir)
+  let data = {};
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch {
+      data = { title: 'Namaz Vakti', body: 'Bir namaz vakti yaklaşıyor' };
+    }
   }
+
+  const title = data.title || 'Namaz Vakti';
+  const options = {
+    body: data.body || '',
+    icon: data.icon || NOTIFICATION_ICON,
+    badge: NOTIFICATION_ICON,
+    tag: data.tag || 'prayer-notification',
+    requireInteraction: true,
+    vibrate: [200, 100, 200],
+    data: {
+      url: data.url || '/',
+      prayerKey: data.prayerKey || '',
+      timestamp: Date.now(),
+    },
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+  );
 });
 
 // Bildirime tıklandığında
@@ -51,7 +48,7 @@ self.addEventListener('notificationclick', (event) => {
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       // Açık bir pencere varsa ona odaklan
       for (const client of clientList) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
+        if ('focus' in client) {
           return client.focus();
         }
       }
@@ -67,12 +64,21 @@ self.addEventListener('notificationclose', () => {
 });
 
 // Push aboneliği değiştiğinde (tarayıcı tarafından yenilendiğinde)
-// Backend'e güncel aboneliği gönder
 self.addEventListener('pushsubscriptionchange', (event) => {
   const oldSubscription = event.oldSubscription;
   const newSubscription = event.newSubscription;
 
-  if (!newSubscription) return;
+  if (!newSubscription) {
+    // Yeni abonelik yoksa, eski aboneliği backend'den sil
+    if (oldSubscription?.endpoint) {
+      fetch('/api/push', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: oldSubscription.endpoint }),
+      }).catch(() => {});
+    }
+    return;
+  }
 
   event.waitUntil(
     fetch('/api/push', {
@@ -89,13 +95,35 @@ self.addEventListener('pushsubscriptionchange', (event) => {
   );
 });
 
-// Aktifleştirme — eski Service Worker'ı devre dışı bırak
+// Aktifleştirme — eski Service Worker'ı devre dışı bırak ve claim et
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  console.log(`[SW v${SW_VERSION}] Activate`);
+  event.waitUntil(
+    self.clients.claim().then(() => {
+      console.log(`[SW v${SW_VERSION}] Tüm clientlar claim edildi`);
+    })
+  );
 });
 
-// Kurulum
+// Kurulum — hemen aktifleş
 self.addEventListener('install', () => {
-  // Hemen aktifleş
+  console.log(`[SW v${SW_VERSION}] Install - skipWaiting`);
   self.skipWaiting();
+});
+
+// Mesaj dinleyici — client'tan gelen mesajları işle
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'GET_VERSION') {
+    event.source?.postMessage({ type: 'SW_VERSION', version: SW_VERSION });
+  }
+  if (event.data?.type === 'CHECK_SUBSCRIPTION') {
+    // Abonelik durumunu kontrol et ve client'a bildir
+    self.registration.pushManager.getSubscription().then((sub) => {
+      event.source?.postMessage({
+        type: 'SUBSCRIPTION_STATUS',
+        hasSubscription: !!sub,
+        endpoint: sub?.endpoint || null,
+      });
+    });
+  }
 });

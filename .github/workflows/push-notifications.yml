@@ -1,0 +1,24 @@
+name: Push Notifications Cron
+
+on:
+  schedule:
+    # Her 5 dakikada bir çalış
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # Manuel tetikleme
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send push notifications
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" "https://mizan-namaz-vakitleri.vercel.app/api/push/notify")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -1)
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response: $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Push notification check failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+          echo "Push notification check completed successfully"

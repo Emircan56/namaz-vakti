@@ -11,6 +11,34 @@ if (vapidPublicKey && vapidPrivateKey) {
   webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 }
 
+// GET: Push abonelik durumunu kontrol et
+export async function GET() {
+  try {
+    const subscriptions = await db.pushSubscription.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Hassas bilgileri gizle
+    const safeList = subscriptions.map((sub) => ({
+      id: sub.id,
+      endpoint: sub.endpoint.slice(-20),
+      city: sub.city,
+      method: sub.method,
+      asrMadhab: sub.asrMadhab,
+      alarms: sub.alarms?.slice(0, 80),
+      createdAt: sub.createdAt,
+      timezone: sub.timezone,
+    }));
+
+    return NextResponse.json({
+      count: subscriptions.length,
+      subscriptions: safeList,
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 // POST: Push aboneliği kaydet
 export async function POST(request: NextRequest) {
   try {
