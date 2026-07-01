@@ -20,8 +20,8 @@ if (vapidPublicKey && vapidPrivateKey) {
   webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 }
 
-// Bildirim penceresi: 5 dakika
-const NOTIFICATION_WINDOW_MS = 5 * 60 * 1000;
+// Bildirim penceresi: 7 dakika (GitHub Actions 5dk cron + gecikme margini)
+const NOTIFICATION_WINDOW_MS = 7 * 60 * 1000;
 
 // Bellek içi tekrar engelleme (serverless'ta her cold start'ta sıfırlanır ama yine de yardımcı)
 const sentKeysCache = new Set<string>();
