@@ -2,8 +2,8 @@ name: Push Notifications Cron
 
 on:
   schedule:
-    # Her 5 dakikada bir çalış
-    - cron: '*/5 * * * *'
+    # Her dakika çalış (GitHub Actions gecikme tolere edilecek)
+    - cron: '* * * * *'
   workflow_dispatch: # Manuel tetikleme
 
 jobs:
